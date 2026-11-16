@@ -1,0 +1,103 @@
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from .models import Incidencia, EventoIncidencia, Tecnico, Unidad
+
+# Definición explícita de la Máquina de Estados (Módulo 1)
+TRANSICIONES_PERMITIDAS = {
+    'PENDIENTE': ['EN_PROCESO', 'CERRADA'],
+    'EN_PROCESO': ['RESUELTA', 'PENDIENTE'],
+    'RESUELTA': ['CERRADA', 'PENDIENTE'],  # 'PENDIENTE' representa la reapertura
+    'CERRADA': ['PENDIENTE'],              # Reapertura desde cerrada
+}
+
+def registrar_evento(incidencia, tipo_evento, usuario_actor, datos_previos=None, datos_nuevos=None):
+    """
+    Función auxiliar de solo anexado (append-only) para guardar 
+    el historial inmutable de auditoría.
+    """
+    EventoIncidencia.objects.create(
+        incidencia=incidencia,
+        tipo_evento=tipo_evento,
+        usuario_actor=usuario_actor,
+        datos_previos=datos_previos,
+        datos_nuevos=datos_nuevos
+    )
+
+@transaction.atomic
+def crear_incidencia(usuario, titulo, descripcion, unidad_id, foto=None):
+    """Caso de uso: Crear una nueva incidencia"""
+    unidad = Unidad.objects.get(id=unidad_id)
+    
+    incidencia = Incidencia.objects.create(
+        titulo=titulo,
+        descripcion=descripcion,
+        unidad=unidad,
+        reportado_por=usuario,
+        foto=foto,
+        estado='PENDIENTE'
+    )
+    
+    registrar_evento(
+        incidencia=incidencia,
+        tipo_evento='INCIDENCIA_CREADA',
+        usuario_actor=usuario,
+        datos_nuevos={'titulo': titulo, 'unidad_id': unidad_id, 'estado': 'PENDIENTE'}
+    )
+    
+    return incidencia
+
+@transaction.atomic
+def cambiar_estado(incidencia_id, nuevo_estado, usuario_actor):
+    """Caso de uso: Cambiar estado con validación estricta de máquina de estados"""
+    incidencia = Incidencia.objects.select_for_update().get(id=incidencia_id)
+    estado_anterior = incidencia.estado
+
+    # Validar transición según la máquina de estados
+    if nuevo_estado not in TRANSICIONES_PERMITIDAS.get(estado_anterior, []):
+        raise ValidationError(
+            f"Transición no permitida: No se puede pasar de '{estado_anterior}' a '{nuevo_estado}'."
+        )
+
+    incidencia.estado = nuevo_estado
+    incidencia.save()
+
+    registrar_evento(
+        incidencia=incidencia,
+        tipo_evento='ESTADO_CAMBIADO',
+        usuario_actor=usuario_actor,
+        datos_previos={'estado': estado_anterior},
+        datos_nuevos={'estado': nuevo_estado}
+    )
+    
+    return incidencia
+
+@transaction.atomic
+def asignar_tecnico(incidencia_id, tecnico_id, usuario_actor):
+    """Caso de uso: Asignar un técnico especializado a la incidencia"""
+    incidencia = Incidencia.objects.select_for_update().get(id=incidencia_id)
+    tecnico = Tecnico.objects.get(id=tecnico_id)
+    
+    tecnico_anterior_id = incidencia.tecnico_asignado_id if incidencia.tecnico_asignado else None
+    
+    incidencia.tecnico_asignado = tecnico
+    
+    # Si estaba en PENDIENTE, al asignar técnico pasa a EN_PROCESO
+    if incidencia.estado == 'PENDIENTE':
+        incidencia.estado = 'EN_PROCESO'
+        
+    incidencia.save()
+
+    registrar_evento(
+        incidencia=incidencia,
+        tipo_evento='TECNICO_ASIGNADO',
+        usuario_actor=usuario_actor,
+        datos_previos={'tecnico_id': tecnico_anterior_id},
+        datos_nuevos={'tecnico_id': tecnico.id, 'estado': incidencia.estado}
+    )
+    
+    return incidencia
+
+@transaction.atomic
+def reabrir_incidencia(incidencia_id, usuario_actor, motivo=""):
+    """Caso de uso: Reabrir una incidencia resuelta o cerrada"""
+    return cambiar_estado(incidencia_id, 'PENDIENTE', usuario_actor)

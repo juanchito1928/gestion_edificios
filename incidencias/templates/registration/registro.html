@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 mt-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white text-center">
+                <h4>Registro de Nuevo Residente</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Renderizamos los campos estándar de usuario de Django -->
+                    {{ form.as_p }}
+                    
+                    <!-- Campos personalizados de nuestro modelo Perfil -->
+                    <div class="mb-3">
+                        <label for="edificio" class="form-label">Edificio:</label>
+                        <input type="text" name="edificio" id="edificio" class="form-control" placeholder="Ej: Torre A" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="piso_puerta" class="form-label">Piso y Apartamento / Puerta:</label>
+                        <input type="text" name="piso_puerta" id="piso_puerta" class="form-control" placeholder="Ej: Piso 3, Apto 302" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100 mt-3">Registrarse</button>
+                </form>
+                
+                <div class="text-center mt-3">
+                    <small class="text-muted">¿Ya tienes una cuenta? <a href="{% url 'login' %}">Inicia sesión aquí</a></small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Lista de Incidencias</h2>
+    <a href="{% url 'incidencias:crear_incidencia' %}" class="btn btn-primary">+ Reportar Incidencia</a>
+</div>
+
+<div class="row">
+    {% for incidencia in incidencias %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm">
+            
+            <!-- Foto de la incidencia (si tiene) -->
+            {% if incidencia.foto %}
+                <img src="{{ incidencia.foto.url }}" class="card-img-top" alt="Foto de {{ incidencia.titulo }}" style="height: 200px; object-fit: cover;">
+            {% endif %}
+            
+            <div class="card-body">
+                <!-- Título como enlace al detalle -->
+                <h5 class="card-title">
+                    <a href="{% url 'incidencias:detalle_incidencia' incidencia.id %}" class="text-decoration-none text-dark">
+                        {{ incidencia.titulo }}
+                    </a>
+                </h5>
+                <h6 class="card-subtitle mb-2 mt-2">
+                    Estado: 
+                    <span class="badge {% if incidencia.estado == 'Pendiente' %}bg-warning text-dark{% elif incidencia.estado == 'Resuelta' %}bg-success{% else %}bg-info{% endif %}">
+                        {{ incidencia.estado }}
+                    </span>
+                </h6>
+                <p class="card-text text-muted mt-3">
+                    {{ incidencia.descripcion|truncatechars:80 }}
+                </p>
+            </div>
+            <div class="card-footer bg-transparent">
+                <small class="text-muted">Reportado por: <b>{{ incidencia.reportada_por.username }}</b></small>
+            </div>
+        </div>
+    </div>
+    
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info text-center" role="alert">
+            No hay incidencias reportadas en el edificio todavía. ¡Todo está en orden!
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

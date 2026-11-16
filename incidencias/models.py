@@ -1,5 +1,7 @@
 from django.db import models
+from django.db.models import Q, CheckConstraint, UniqueConstraint, Index
 from django.contrib.auth.models import User
+from django.contrib.postgres.indexes import GinIndex
 from .tenant import PorEdificioManager, TodosLosEdificiosManager
 
 
@@ -24,6 +26,14 @@ class Edificio(models.Model):
 class Unidad(models.Model):
     edificio = models.ForeignKey(Edificio, on_delete=models.CASCADE, related_name='unidades')
     numero = models.CharField(max_length=50, help_text="Ej: Apto 302, Local 1")
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=['edificio', 'numero'],
+                name='uq_unidad_edificio_numero'
+            )
+        ]
 
     def __str__(self):
         return f"{self.numero} - {self.edificio.nombre}"
@@ -68,7 +78,7 @@ class Tecnico(models.Model):
         return self.usuario.username
 
 
-# 3. Entidad Principal (Incidencia con aislamiento PorEdificio)
+# 3. Entidad Principal (Incidencia con aislamiento PorEdificio + Índices M3 + Bloqueo Optimista)
 class Incidencia(models.Model):
     ESTADOS = [
         ('PENDIENTE', 'Pendiente'),
@@ -91,6 +101,9 @@ class Incidencia(models.Model):
     foto = models.ImageField(upload_to='incidencias/', blank=True, null=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='PENDIENTE')
 
+    # Campo de control de concurrencia optimista (M3)
+    version = models.PositiveIntegerField(default=1)
+
     unidad = models.ForeignKey(Unidad, on_delete=models.CASCADE, related_name='incidencias', null=True, blank=True)
     reportado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incidencias_reportadas')
     tecnico_asignado = models.ForeignKey(Tecnico, on_delete=models.SET_NULL, null=True, blank=True, related_name='incidencias_asignadas')
@@ -98,13 +111,51 @@ class Incidencia(models.Model):
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
-    # Manager obligatorio por defecto (filtra por edificio activo)
     objects = PorEdificioManager()
-    # Manager explícito sin filtro para tareas administrativas o auditoría global
     sin_filtro = TodosLosEdificiosManager()
 
+    class Meta:
+        indexes = [
+            # Índice compuesto para listado multi-tenant ordenado por fecha
+            Index(fields=['edificio', '-fecha_creacion'], name='idx_inc_edif_fecha'),
+            # Índice compuesto para filtros por edificio + estado + fecha
+            Index(fields=['edificio', 'estado', '-fecha_creacion'], name='idx_inc_edif_est_fecha'),
+            # Índice parcial solo para incidencias activas/abiertas
+            Index(
+                fields=['edificio', 'tecnico_asignado', 'fecha_creacion'],
+                name='idx_inc_abiertas_parcial',
+                condition=Q(estado__in=['PENDIENTE', 'EN_PROCESO']),
+            ),
+            # Índices GIN con trigramas (pg_trgm) para búsqueda tolerante a errores tipográficos
+            GinIndex(
+                name='idx_inc_titulo_trgm',
+                fields=['titulo'],
+                opclasses=['gin_trgm_ops'],
+            ),
+            GinIndex(
+                name='idx_inc_desc_trgm',
+                fields=['descripcion'],
+                opclasses=['gin_trgm_ops'],
+            ),
+        ]
+        constraints = [
+            CheckConstraint(
+                condition=Q(estado__in=['PENDIENTE', 'EN_PROCESO', 'RESUELTA', 'CERRADA']),
+                name='chk_incidencia_estado_valido',
+            ),
+            CheckConstraint(
+                condition=Q(version__gte=1),
+                name='chk_incidencia_version_positiva',
+            ),
+            # Restricción única condicional: evita duplicar una misma incidencia abierta en la misma unidad
+            UniqueConstraint(
+                fields=['unidad', 'titulo'],
+                condition=Q(estado__in=['PENDIENTE', 'EN_PROCESO']),
+                name='uq_incidencia_abierta_unidad_titulo',
+            ),
+        ]
+
     def save(self, *args, **kwargs):
-        # Si no se pasó edificio explícitamente, inferirlo de la unidad o del perfil del autor
         if not self.edificio_id:
             if self.unidad_id and self.unidad.edificio_id:
                 self.edificio_id = self.unidad.edificio_id
@@ -133,6 +184,11 @@ class Comentario(models.Model):
     objects = PorEdificioManager()
     sin_filtro = TodosLosEdificiosManager()
 
+    class Meta:
+        indexes = [
+            Index(fields=['incidencia', 'fecha_creacion'], name='idx_com_incidencia_fecha'),
+        ]
+
     def save(self, *args, **kwargs):
         if not self.edificio_id and self.incidencia_id:
             self.edificio_id = self.incidencia.edificio_id
@@ -151,8 +207,13 @@ class EventoIncidencia(models.Model):
     usuario_actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     fecha_evento = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            Index(fields=['incidencia', 'fecha_evento'], name='idx_evt_incidencia_fecha'),
+        ]
+
     def __str__(self):
-        return f"{self.tipo_evento} - Incidencia {self.incidencia_id} ({self.fecha_evento})"
+        return f"{self.tipo_evento} Incidencia {self.incidencia_id} ({self.fecha_evento})"
 
 
 # 6. Registro de Auditoría de Accesos (Módulo 2)

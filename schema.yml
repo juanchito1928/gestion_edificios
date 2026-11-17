@@ -1,0 +1,868 @@
+openapi: 3.0.3
+info:
+  title: VecinosApp API
+  version: 1.0.0
+  description: API REST versionada para gestión multi-edificio de incidencias (Módulo
+    4)
+paths:
+  /api/v1/incidencias/:
+    get:
+      operationId: incidencias_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: El valor del cursor de paginación.
+        schema:
+          type: string
+      tags:
+      - incidencias
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedIncidenciaList'
+          description: ''
+    post:
+      operationId: incidencias_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Clave única para evitar duplicados al reintentar POST
+      tags:
+      - incidencias
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearIncidenciaInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrearIncidenciaInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrearIncidenciaInput'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incidencia'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incidencia'
+          description: ''
+  /api/v1/incidencias/{id}/:
+    get:
+      operationId: incidencias_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este incidencia.
+        required: true
+      tags:
+      - incidencias
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incidencia'
+          description: ''
+  /api/v1/incidencias/{id}/adjuntos/:
+    get:
+      operationId: incidencias_adjuntos_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este incidencia.
+        required: true
+      tags:
+      - incidencias
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incidencia'
+          description: ''
+  /api/v1/incidencias/{id}/adjuntos/solicitar-subida/:
+    post:
+      operationId: incidencias_adjuntos_solicitar_subida_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este incidencia.
+        required: true
+      tags:
+      - incidencias
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitarSubidaInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SolicitarSubidaInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SolicitarSubidaInput'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/incidencias/{id}/asignar-tecnico/:
+    post:
+      operationId: incidencias_asignar_tecnico_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este incidencia.
+        required: true
+      tags:
+      - incidencias
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AsignarTecnicoInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AsignarTecnicoInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AsignarTecnicoInput'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incidencia'
+          description: ''
+  /api/v1/incidencias/{id}/cambiar-estado/:
+    post:
+      operationId: incidencias_cambiar_estado_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este incidencia.
+        required: true
+      tags:
+      - incidencias
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CambiarEstadoInput'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incidencia'
+          description: ''
+  /api/v1/incidencias/{id}/comentarios/:
+    get:
+      operationId: incidencias_comentarios_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: El valor del cursor de paginación.
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este incidencia.
+        required: true
+      tags:
+      - incidencias
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comentario'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedComentarioList'
+          description: ''
+    post:
+      operationId: incidencias_comentarios_create
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: El valor del cursor de paginación.
+        schema:
+          type: string
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Un valor de entero único que identifique este incidencia.
+        required: true
+      tags:
+      - incidencias
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comentario'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Comentario'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Comentario'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comentario'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedComentarioList'
+          description: ''
+  /api/v1/token/:
+    post:
+      operationId: token_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /api/v1/token/refresh/:
+    post:
+      operationId: token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/uploads/prefirmado/{token}/:
+    put:
+      operationId: uploads_prefirmado_update
+      description: |-
+        Endpoint destino de la URL prefirmada: recibe el binario y verifica
+        los magic bytes reales contra el tipo MIME declarado (Reto avanzado M4).
+      parameters:
+      - in: path
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - uploads
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/webhooks/:
+    get:
+      operationId: webhooks_list
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: El valor del cursor de paginación.
+        schema:
+          type: string
+      tags:
+      - webhooks
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSuscripcionWebhookList'
+          description: ''
+    post:
+      operationId: webhooks_create
+      tags:
+      - webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuscripcionWebhook'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SuscripcionWebhook'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SuscripcionWebhook'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuscripcionWebhook'
+          description: ''
+  /api/v1/webhooks/{id}/:
+    get:
+      operationId: webhooks_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - webhooks
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuscripcionWebhook'
+          description: ''
+    put:
+      operationId: webhooks_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuscripcionWebhook'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SuscripcionWebhook'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SuscripcionWebhook'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuscripcionWebhook'
+          description: ''
+    patch:
+      operationId: webhooks_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSuscripcionWebhook'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSuscripcionWebhook'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSuscripcionWebhook'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuscripcionWebhook'
+          description: ''
+    delete:
+      operationId: webhooks_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - webhooks
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+components:
+  schemas:
+    AdjuntoIncidencia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nombre_archivo:
+          type: string
+          maxLength: 255
+        tipo_mime_declarado:
+          type: string
+          maxLength: 100
+        tipo_mime_real:
+          type: string
+          readOnly: true
+        verificado:
+          type: boolean
+          readOnly: true
+        archivo:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+        fecha_creacion:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - archivo
+      - fecha_creacion
+      - id
+      - nombre_archivo
+      - tipo_mime_declarado
+      - tipo_mime_real
+      - verificado
+    AsignarTecnicoInput:
+      type: object
+      properties:
+        tecnico_id:
+          type: integer
+      required:
+      - tecnico_id
+    CambiarEstadoInput:
+      type: object
+      properties:
+        nuevo_estado:
+          $ref: '#/components/schemas/NuevoEstadoEnum'
+      required:
+      - nuevo_estado
+    Comentario:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        autor:
+          type: string
+          readOnly: true
+        texto:
+          type: string
+        fecha_creacion:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - autor
+      - fecha_creacion
+      - id
+      - texto
+    CrearIncidenciaInput:
+      type: object
+      properties:
+        titulo:
+          type: string
+          maxLength: 200
+        descripcion:
+          type: string
+        unidad_id:
+          type: integer
+      required:
+      - descripcion
+      - titulo
+      - unidad_id
+    EstadoEnum:
+      enum:
+      - PENDIENTE
+      - EN_PROCESO
+      - RESUELTA
+      - CERRADA
+      type: string
+      description: |-
+        * `PENDIENTE` - Pendiente
+        * `EN_PROCESO` - En Proceso
+        * `RESUELTA` - Resuelta
+        * `CERRADA` - Cerrada
+    Incidencia:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        titulo:
+          type: string
+          maxLength: 200
+        descripcion:
+          type: string
+        categoria:
+          type: string
+          nullable: true
+          maxLength: 100
+        prioridad:
+          type: string
+          nullable: true
+          maxLength: 50
+        estado:
+          allOf:
+          - $ref: '#/components/schemas/EstadoEnum'
+          readOnly: true
+          default: PENDIENTE
+        version:
+          type: integer
+          readOnly: true
+        unidad:
+          type: integer
+          nullable: true
+        unidad_numero:
+          type: string
+          readOnly: true
+        reportado_por:
+          type: string
+          readOnly: true
+        tecnico_asignado:
+          type: integer
+          nullable: true
+        tecnico_username:
+          type: string
+          readOnly: true
+        fecha_creacion:
+          type: string
+          format: date-time
+          readOnly: true
+        fecha_actualizacion:
+          type: string
+          format: date-time
+          readOnly: true
+        comentarios:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comentario'
+          readOnly: true
+        adjuntos:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdjuntoIncidencia'
+          readOnly: true
+      required:
+      - adjuntos
+      - comentarios
+      - descripcion
+      - estado
+      - fecha_actualizacion
+      - fecha_creacion
+      - id
+      - reportado_por
+      - tecnico_username
+      - titulo
+      - unidad_numero
+      - version
+    NuevoEstadoEnum:
+      enum:
+      - PENDIENTE
+      - EN_PROCESO
+      - RESUELTA
+      - CERRADA
+      type: string
+      description: |-
+        * `PENDIENTE` - PENDIENTE
+        * `EN_PROCESO` - EN_PROCESO
+        * `RESUELTA` - RESUELTA
+        * `CERRADA` - CERRADA
+    PaginatedComentarioList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comentario'
+    PaginatedIncidenciaList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Incidencia'
+    PaginatedSuscripcionWebhookList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SuscripcionWebhook'
+    PatchedSuscripcionWebhook:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        evento:
+          type: string
+          maxLength: 100
+        url_destino:
+          type: string
+          format: uri
+          maxLength: 500
+        secreto_hmac:
+          type: string
+          maxLength: 128
+        activo:
+          type: boolean
+        fecha_creacion:
+          type: string
+          format: date-time
+          readOnly: true
+    SolicitarSubidaInput:
+      type: object
+      properties:
+        nombre_archivo:
+          type: string
+          maxLength: 255
+        tipo_mime_declarado:
+          $ref: '#/components/schemas/TipoMimeDeclaradoEnum'
+      required:
+      - nombre_archivo
+      - tipo_mime_declarado
+    SuscripcionWebhook:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        evento:
+          type: string
+          maxLength: 100
+        url_destino:
+          type: string
+          format: uri
+          maxLength: 500
+        secreto_hmac:
+          type: string
+          maxLength: 128
+        activo:
+          type: boolean
+        fecha_creacion:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - fecha_creacion
+      - id
+      - secreto_hmac
+      - url_destino
+    TipoMimeDeclaradoEnum:
+      enum:
+      - image/jpeg
+      - image/png
+      - image/webp
+      - application/pdf
+      type: string
+      description: |-
+        * `image/jpeg` - image/jpeg
+        * `image/png` - image/png
+        * `image/webp` - image/webp
+        * `application/pdf` - application/pdf
+    TokenObtainPair:
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+        password:
+          type: string
+          writeOnly: true
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - password
+      - refresh
+      - username
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

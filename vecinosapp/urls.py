@@ -8,8 +8,10 @@ admin.site.__class__ = OTPAdminSite
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/', include('api.urls')),
     path('cuentas/', include('django.contrib.auth.urls')),
     path('', include('incidencias.urls')),
+    
 ]
 
 if settings.DEBUG:

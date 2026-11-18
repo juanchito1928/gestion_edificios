@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 from pathlib import Path
 import os
 from datetime import timedelta
+from celery.schedules import crontab
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,6 +51,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
     'api',
+    'django_celery_beat',
+    'mensajeria',
 ]
 
 
@@ -195,4 +198,30 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'API REST versionada para gestión multi-edificio de incidencias (Módulo 4)',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+}
+
+# --- Configuración Módulo 5: Celery, Redis y Notificaciones ---
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://127.0.0.1:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'America/Bogota'
+CELERY_TASK_ACKS_LATE = True  # No confirma la tarea hasta que termine (evita pérdidas si muere el worker)
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+
+# Backend de correo en consola para desarrollo (imprime los correos en terminal sin fallar)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = 'notificaciones@vecinosapp.local'
+
+
+CELERY_BEAT_SCHEDULE = {
+    'rescatar-outbox-pendiente-cada-minuto': {
+        'task': 'mensajeria.tasks.rescatar_mensajes_outbox_pendientes',
+        'schedule': 60.0,
+    },
+    'escalar-incidencias-sla-cada-15-min': {
+        'task': 'mensajeria.tasks.escalar_incidencias_sla',
+        'schedule': crontab(minute='*/15'),
+    },
 }

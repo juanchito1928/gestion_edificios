@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from .models import Incidencia, EventoIncidencia, Tecnico, Unidad
+from mensajeria.outbox import publicar_evento_outbox
 
 # Definición explícita de la Máquina de Estados (Módulo 1)
 TRANSICIONES_PERMITIDAS = {
@@ -9,6 +10,7 @@ TRANSICIONES_PERMITIDAS = {
     'RESUELTA': ['CERRADA', 'PENDIENTE'],  # 'PENDIENTE' representa la reapertura
     'CERRADA': ['PENDIENTE'],              # Reapertura desde cerrada
 }
+
 
 def registrar_evento(incidencia, tipo_evento, usuario_actor, datos_previos=None, datos_nuevos=None):
     """
@@ -23,9 +25,10 @@ def registrar_evento(incidencia, tipo_evento, usuario_actor, datos_previos=None,
         datos_nuevos=datos_nuevos
     )
 
+
 @transaction.atomic
 def crear_incidencia(usuario, titulo, descripcion, unidad_id, foto=None):
-    """Caso de uso: Crear una nueva incidencia"""
+    """Caso de uso: Crear una nueva incidencia y publicar evento en el Outbox"""
     unidad = Unidad.objects.get(id=unidad_id)
     
     incidencia = Incidencia.objects.create(
@@ -43,12 +46,26 @@ def crear_incidencia(usuario, titulo, descripcion, unidad_id, foto=None):
         usuario_actor=usuario,
         datos_nuevos={'titulo': titulo, 'unidad_id': unidad_id, 'estado': 'PENDIENTE'}
     )
+
+    publicar_evento_outbox(
+        edificio_id=incidencia.edificio_id,
+        tipo_evento='incidencia.creada',
+        clave_idempotencia=f"inc-creada-{incidencia.id}",
+        payload={
+            'incidencia_id': incidencia.id,
+            'titulo': incidencia.titulo,
+            'estado': incidencia.estado,
+            'email_destino': usuario.email or 'residente@vecinosapp.local',
+            'detalle': f"Se ha registrado tu incidencia '{incidencia.titulo}'.",
+        },
+    )
     
     return incidencia
 
+
 @transaction.atomic
 def cambiar_estado(incidencia_id, nuevo_estado, usuario_actor):
-    """Caso de uso: Cambiar estado con validación estricta de máquina de estados"""
+    """Caso de uso: Cambiar estado con validación estricta y publicación en Outbox"""
     incidencia = Incidencia.objects.select_for_update().get(id=incidencia_id)
     estado_anterior = incidencia.estado
 
@@ -68,8 +85,23 @@ def cambiar_estado(incidencia_id, nuevo_estado, usuario_actor):
         datos_previos={'estado': estado_anterior},
         datos_nuevos={'estado': nuevo_estado}
     )
+
+    publicar_evento_outbox(
+        edificio_id=incidencia.edificio_id,
+        tipo_evento='incidencia.resuelta' if nuevo_estado == 'RESUELTA' else 'incidencia.estado_cambiado',
+        clave_idempotencia=f"inc-estado-{incidencia.id}-v{incidencia.version}-{nuevo_estado}",
+        payload={
+            'incidencia_id': incidencia.id,
+            'titulo': incidencia.titulo,
+            'estado_anterior': estado_anterior,
+            'estado_nuevo': nuevo_estado,
+            'email_destino': incidencia.reportado_por.email or 'residente@vecinosapp.local',
+            'detalle': f"Tu incidencia '{incidencia.titulo}' pasó de {estado_anterior} a {nuevo_estado}.",
+        },
+    )
     
     return incidencia
+
 
 @transaction.atomic
 def asignar_tecnico(incidencia_id, tecnico_id, usuario_actor):
@@ -94,8 +126,23 @@ def asignar_tecnico(incidencia_id, tecnico_id, usuario_actor):
         datos_previos={'tecnico_id': tecnico_anterior_id},
         datos_nuevos={'tecnico_id': tecnico.id, 'estado': incidencia.estado}
     )
+
+    publicar_evento_outbox(
+        edificio_id=incidencia.edificio_id,
+        tipo_evento='incidencia.tecnico_asignado',
+        clave_idempotencia=f"inc-tecnico-{incidencia.id}-v{incidencia.version}-tec{tecnico.id}",
+        payload={
+            'incidencia_id': incidencia.id,
+            'titulo': incidencia.titulo,
+            'tecnico_id': tecnico.id,
+            'estado': incidencia.estado,
+            'email_destino': tecnico.usuario.email or 'tecnico@vecinosapp.local',
+            'detalle': f"Se te ha asignado la incidencia '{incidencia.titulo}'.",
+        },
+    )
     
     return incidencia
+
 
 @transaction.atomic
 def reabrir_incidencia(incidencia_id, usuario_actor, motivo=""):

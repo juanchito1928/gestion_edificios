@@ -1,8 +1,27 @@
-﻿venv/
+﻿# Entornos virtuales y compilados de Python
+venv/
 .venv/
 __pycache__/
 *.py[cod]
-*.sqlite3
+*$py.class
+*.egg-info/
+
+# Archivos generados por Django y pruebas
+staticfiles/
 media/
+*.log
+db.sqlite3
+.coverage
+htmlcov/
+.hypothesis/
+
+# Variables de entorno y secretos locales
 .env
+.env.*
+!.env.example
+
+# Archivos de sistema operativo y editores (Windows / VS Code)
 .vscode/
+.idea/
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,91 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vecinos_db}
+      POSTGRES_USER: ${POSTGRES_USER:-vecinos_app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vecinos_pass_segura}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vecinos_app_user} -d ${POSTGRES_DB:-vecinos_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build: .
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             daphne -b 0.0.0.0 -p 8000 vecinosapp.asgi:application"
+    ports:
+      - "8000:8000"
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-prod-secret-key-vecinosapp}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      POSTGRES_DB: ${POSTGRES_DB:-vecinos_db}
+      POSTGRES_USER: ${POSTGRES_USER:-vecinos_app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vecinos_pass_segura}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      USE_REDIS_CHANNELS: "True"
+      CELERY_TASK_ALWAYS_EAGER: "False"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_worker:
+    build: .
+    restart: unless-stopped
+    command: celery -A vecinosapp worker -l info
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-prod-secret-key-vecinosapp}
+      POSTGRES_DB: ${POSTGRES_DB:-vecinos_db}
+      POSTGRES_USER: ${POSTGRES_USER:-vecinos_app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vecinos_pass_segura}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "False"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_beat:
+    build: .
+    restart: unless-stopped
+    command: celery -A vecinosapp beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-prod-secret-key-vecinosapp}
+      POSTGRES_DB: ${POSTGRES_DB:-vecinos_db}
+      POSTGRES_USER: ${POSTGRES_USER:-vecinos_app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vecinos_pass_segura}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "False"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

@@ -1,7 +1,10 @@
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from .models import Incidencia, EventoIncidencia, Tecnico, Unidad
+
 from mensajeria.outbox import publicar_evento_outbox
+from .models import EventoIncidencia, Incidencia, Tecnico, Unidad
 
 # Definición explícita de la Máquina de Estados (Módulo 1)
 TRANSICIONES_PERMITIDAS = {
@@ -24,6 +27,31 @@ def registrar_evento(incidencia, tipo_evento, usuario_actor, datos_previos=None,
         datos_previos=datos_previos,
         datos_nuevos=datos_nuevos
     )
+
+
+def _notificar_tiempo_real(incidencia, tipo_evento):
+    """Publica el evento por WebSocket a los grupos del edificio y de la incidencia tras el commit (Módulo 6)."""
+    def _enviar():
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+        payload = {
+            'tipo': tipo_evento,
+            'incidencia_id': incidencia.id,
+            'titulo': incidencia.titulo,
+            'estado': incidencia.estado,
+            'estado_display': incidencia.get_estado_display(),
+            'tecnico': (
+                incidencia.tecnico_asignado.usuario.get_full_name()
+                or incidencia.tecnico_asignado.usuario.username
+                if incidencia.tecnico_asignado else 'Sin asignar'
+            ),
+        }
+        mensaje = {'type': 'incidencia_actualizada', 'data': payload}
+        async_to_sync(channel_layer.group_send)(f"edificio_{incidencia.edificio_id}", mensaje)
+        async_to_sync(channel_layer.group_send)(f"incidencia_{incidencia.id}", mensaje)
+
+    transaction.on_commit(_enviar)
 
 
 @transaction.atomic
@@ -59,6 +87,8 @@ def crear_incidencia(usuario, titulo, descripcion, unidad_id, foto=None):
             'detalle': f"Se ha registrado tu incidencia '{incidencia.titulo}'.",
         },
     )
+
+    _notificar_tiempo_real(incidencia, 'incidencia.creada')
     
     return incidencia
 
@@ -99,6 +129,8 @@ def cambiar_estado(incidencia_id, nuevo_estado, usuario_actor):
             'detalle': f"Tu incidencia '{incidencia.titulo}' pasó de {estado_anterior} a {nuevo_estado}.",
         },
     )
+
+    _notificar_tiempo_real(incidencia, 'incidencia.estado_cambiado')
     
     return incidencia
 
@@ -140,6 +172,8 @@ def asignar_tecnico(incidencia_id, tecnico_id, usuario_actor):
             'detalle': f"Se te ha asignado la incidencia '{incidencia.titulo}'.",
         },
     )
+
+    _notificar_tiempo_real(incidencia, 'incidencia.tecnico_asignado')
     
     return incidencia
 

@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0">📊 Panel de Indicadores Operativos</h2>
+        <small class="text-muted">Métricas de rendimiento, tiempos de respuesta (SLA) y carga técnica</small>
+    </div>
+    <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-outline-secondary">Volver a Incidencias</a>
+</div>
+
+<!-- Barra de Filtros -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form id="form-filtros-panel" method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label for="filtro-edificio" class="form-label fw-semibold">Edificio</label>
+                <select name="edificio" id="filtro-edificio" class="form-select">
+                    <option value="">Todos los edificios</option>
+                    {% for ed in edificios %}
+                        <option value="{{ ed.id }}" {% if filtros.edificio == ed.id|stringformat:"s" %}selected{% endif %}>
+                            {{ ed.nombre }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="filtro-tecnico" class="form-label fw-semibold">Técnico Asignado</label>
+                <select name="tecnico" id="filtro-tecnico" class="form-select">
+                    <option value="">Todos los técnicos</option>
+                    {% for tec in tecnicos %}
+                        <option value="{{ tec.id }}" {% if filtros.tecnico == tec.id|stringformat:"s" %}selected{% endif %}>
+                            {{ tec.usuario.username }} ({{ tec.especialidad }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="filtro-inicio" class="form-label fw-semibold">Desde</label>
+                <input type="date" name="fecha_inicio" id="filtro-inicio" class="form-control" value="{{ filtros.fecha_inicio }}">
+            </div>
+            <div class="col-md-2">
+                <label for="filtro-fin" class="form-label fw-semibold">Hasta</label>
+                <input type="date" name="fecha_fin" id="filtro-fin" class="form-control" value="{{ filtros.fecha_fin }}">
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                <a href="{% url 'incidencias:panel_indicadores' %}" class="btn btn-outline-secondary">Limpiar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 4 Tarjetas de KPIs -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm border-start border-primary border-4 h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-2">Tiempo Medio Resolución</h6>
+                <h2 class="fw-bold text-primary mb-0" id="kpi-mttr">{{ kpis.mttr_horas }} h</h2>
+                <small class="text-muted">MTTR promedio</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-start border-success border-4 h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-2">Cumplimiento SLA (≤24h)</h6>
+                <h2 class="fw-bold text-success mb-0" id="kpi-sla">{{ kpis.cumplimiento_sla }}%</h2>
+                <small class="text-muted">Casos atendidos a tiempo</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-start border-warning border-4 h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-2">Casos Abiertos</h6>
+                <h2 class="fw-bold text-warning mb-0" id="kpi-abiertos">{{ kpis.casos_abiertos }}</h2>
+                <small class="text-muted">Pendientes o en proceso</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm border-start border-danger border-4 h-100">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-2">Tasa de Reapertura</h6>
+                <h2 class="fw-bold text-danger mb-0" id="kpi-reapertura">{{ kpis.tasa_reapertura }}%</h2>
+                <small class="text-muted">Casos reabiertos tras cierre</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficas con Chart.js -->
+<div class="row g-4 mb-5">
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-bold">Distribución por Estado</div>
+            <div class="card-body d-flex justify-content-center align-items-center" style="min-height: 300px;">
+                <canvas id="chartEstados"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-bold">Carga de Trabajo por Técnico</div>
+            <div class="card-body d-flex justify-content-center align-items-center" style="min-height: 300px;">
+                <canvas id="chartTecnicos"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Datos serializados de forma segura para JS -->
+{{ kpis|json_script:"datos-kpis-iniciales" }}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  (function() {
+    const kpis = JSON.parse(document.getElementById('datos-kpis-iniciales').textContent);
+
+    // 1. Gráfica de Dona: Distribución por Estado
+    const estadosLabels = ['PENDIENTE', 'EN_PROCESO', 'RESUELTA', 'CERRADA'];
+    const estadosValores = estadosLabels.map(est => kpis.por_estado[est] || 0);
+
+    new Chart(document.getElementById('chartEstados'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Pendiente', 'En Proceso', 'Resuelta', 'Cerrada'],
+        datasets: [{
+          data: estadosValores,
+          backgroundColor: ['#f59e0b', '#0dcaf0', '#198754', '#6c757d']
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+
+    // 2. Gráfica de Barras: Carga por Técnico
+    const tecnicosLabels = Object.keys(kpis.por_tecnico);
+    const tecnicosValores = Object.values(kpis.por_tecnico);
+
+    new Chart(document.getElementById('chartTecnicos'), {
+      type: 'bar',
+      data: {
+        labels: tecnicosLabels.length ? tecnicosLabels : ['Sin técnicos asignados'],
+        datasets: [{
+          label: 'Incidencias asignadas',
+          data: tecnicosValores.length ? tecnicosValores : [0],
+          backgroundColor: '#2563eb',
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+        plugins: { legend: { display: false } }
+      }
+    });
+  })();
+</script>
+{% endblock %}

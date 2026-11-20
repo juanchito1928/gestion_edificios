@@ -34,6 +34,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -41,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.postgres',
+    'channels',
     'incidencias',
     'rules.apps.AutodiscoverRulesConfig',
     'axes',
@@ -88,6 +90,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'vecinosapp.wsgi.application'
+ASGI_APPLICATION = 'vecinosapp.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    }
+}
 
 
 # Database
@@ -209,6 +218,8 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'America/Bogota'
 CELERY_TASK_ACKS_LATE = True  # No confirma la tarea hasta que termine (evita pérdidas si muere el worker)
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = False
 
 # Backend de correo en consola para desarrollo (imprime los correos en terminal sin fallar)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

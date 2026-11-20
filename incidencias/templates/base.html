@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="manifest" href="/manifest.json">
     <title>VecinosApp - Gestión de Edificios</title>
     <!-- CSS de Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -12,33 +14,37 @@
     <!-- Menú de Navegación -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
         <div class="container">
-            <a class="navbar-brand" href="#">VecinosApp</a>
-            <div class="collapse navbar-collapse">
-                <ul class="navbar-nav ms-auto align-items-center">
-    {% if user.is_authenticated %}
-        <li class="nav-item me-3 text-white">
-            Hola, <b>{{ user.username }}</b>
-        </li>
-        <li class="nav-item">
-            <!-- Formulario necesario en Django 5 para el Logout por seguridad -->
-            <form action="{% url 'logout' %}" method="post" class="d-inline">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-outline-light btn-sm me-2">Salir</button>
-            </form>
-        </li>
-    {% else %}
-        <li class="nav-item me-2">
-            <a class="btn btn-outline-light btn-sm" href="{% url 'incidencias:registro' %}">Registrarse</a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link text-white" href="{% url 'login' %}">Iniciar Sesión</a>
-        </li>
-    {% endif %}
-    
+            <a class="navbar-brand" href="{% url 'incidencias:lista_incidencias' %}">VecinosApp</a>
+            <div class="collapse navbar-collapse show">
+                <ul class="navbar-nav me-auto">
+                    {% if user.is_staff or user.is_superuser or user.perfil.rol in 'ADMIN_EDIFICIO,ADMIN,AUDITOR,TECNICO' %}
     <li class="nav-item">
-        <a class="nav-link text-white" href="/admin/" target="_blank">Panel Admin</a>
+        <a class="nav-link text-info fw-semibold" href="{% url 'incidencias:panel_indicadores' %}">📊 Panel Indicadores</a>
     </li>
-</ul>
+{% endif %}
+                </ul>
+                <ul class="navbar-nav ms-auto align-items-center">
+                    {% if user.is_authenticated %}
+                        <li class="nav-item me-3">
+                            <span id="badge-conexion" class="badge bg-success">En línea</span>
+                        </li>
+                        <li class="nav-item me-3 text-white">
+                            Hola, <b>{{ user.username }}</b>
+                        </li>
+                        <li class="nav-item">
+                            <form action="{% url 'logout' %}" method="post" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-light btn-sm me-2">Salir</button>
+                            </form>
+                        </li>
+                    {% else %}
+                        <li class="nav-item me-2">
+                            <a class="btn btn-outline-light btn-sm" href="{% url 'incidencias:registro' %}">Registrarse</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-white" href="{% url 'login' %}">Iniciar Sesión</a>
+                        </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link text-white" href="/admin/" target="_blank">Panel Admin</a>
                     </li>
@@ -47,14 +53,32 @@
         </div>
     </nav>
 
-    <!-- Contenedor Principal donde se inyectarán las otras páginas -->
+    <!-- Contenedor Principal -->
     <div class="container">
         {% block content %}
-        <!-- El contenido de las otras páginas aparecerá aquí -->
         {% endblock %}
     </div>
 
-    <!-- Scripts de Bootstrap -->
+    <!-- Scripts de Bootstrap y PWA -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+      function actualizarEstadoRed() {
+        const badge = document.getElementById('badge-conexion');
+        if (!badge) return;
+        if (navigator.onLine) {
+          badge.className = 'badge bg-success';
+          badge.textContent = 'En línea';
+        } else {
+          badge.className = 'badge bg-danger';
+          badge.textContent = 'Sin conexión (Modo Offline)';
+        }
+      }
+      window.addEventListener('online', actualizarEstadoRed);
+      window.addEventListener('offline', actualizarEstadoRed);
+      actualizarEstadoRed();
+    </script>
 </body>
 </html>

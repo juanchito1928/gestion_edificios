@@ -2,10 +2,18 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Lista de Incidencias</h2>
-    {% if user.perfil.rol != 'AUDITOR' %}
-        <a href="{% url 'incidencias:crear_incidencia' %}" class="btn btn-primary">+ Reportar Incidencia</a>
-    {% endif %}
+    <div>
+        <h2 class="mb-0">Lista de Incidencias</h2>
+        <small id="ws-status-list" class="text-muted">Conectando canal en vivo...</small>
+    </div>
+    <div class="d-flex gap-2">
+        {% if user.is_staff or user.is_superuser or user.perfil.rol in 'ADMIN_EDIFICIO,ADMIN,AUDITOR,TECNICO' %}
+            <a href="{% url 'incidencias:panel_indicadores' %}" class="btn btn-outline-dark">📊 Panel Indicadores</a>
+        {% endif %}
+        {% if user.perfil.rol != 'AUDITOR' %}
+            <a href="{% url 'incidencias:crear_incidencia' %}" class="btn btn-primary">+ Reportar Incidencia</a>
+        {% endif %}
+    </div>
 </div>
 
 <!-- Buscador Full-Text + Trigramas y Filtro por Estado (Módulo 3) -->
@@ -36,18 +44,21 @@
     </div>
 </form>
 
-<div class="row">
+<!-- Banner dinámico cuando llega una nueva incidencia o cambio en vivo -->
+<div id="alerta-tiempo-real" class="alert alert-info d-none justify-content-between align-items-center" role="alert">
+    <span id="alerta-tiempo-real-texto"></span>
+    <button type="button" class="btn btn-sm btn-outline-primary" onclick="location.reload()">Actualizar listado</button>
+</div>
+
+<div class="row" id="grid-incidencias">
     {% for incidencia in incidencias %}
-    <div class="col-md-4 mb-4">
+    <div class="col-md-4 mb-4" id="card-incidencia-{{ incidencia.id }}">
         <div class="card h-100 shadow-sm">
-            
-            <!-- Foto de la incidencia (si tiene) -->
             {% if incidencia.foto %}
                 <img src="{{ incidencia.foto.url }}" class="card-img-top" alt="Foto de {{ incidencia.titulo }}" style="height: 200px; object-fit: cover;">
             {% endif %}
             
             <div class="card-body">
-                <!-- Título como enlace al detalle -->
                 <h5 class="card-title">
                     <a href="{% url 'incidencias:detalle_incidencia' incidencia.id %}" class="text-decoration-none text-dark">
                         {{ incidencia.titulo }}
@@ -55,7 +66,7 @@
                 </h5>
                 <h6 class="card-subtitle mb-2 mt-2">
                     Estado: 
-                    <span class="badge {% if incidencia.estado == 'PENDIENTE' %}bg-warning text-dark{% elif incidencia.estado == 'RESUELTA' %}bg-success{% elif incidencia.estado == 'CERRADA' %}bg-secondary{% else %}bg-info text-dark{% endif %}">
+                    <span id="badge-estado-{{ incidencia.id }}" class="badge {% if incidencia.estado == 'PENDIENTE' %}bg-warning text-dark{% elif incidencia.estado == 'RESUELTA' %}bg-success{% elif incidencia.estado == 'CERRADA' %}bg-secondary{% else %}bg-info text-dark{% endif %}">
                         {{ incidencia.get_estado_display }}
                     </span>
                 </h6>
@@ -71,7 +82,6 @@
             </div>
         </div>
     </div>
-    
     {% empty %}
     <div class="col-12">
         <div class="alert alert-info text-center" role="alert">
@@ -85,7 +95,6 @@
     {% endfor %}
 </div>
 
-<!-- Controles de Paginación (25 registros por página) -->
 {% if is_paginated %}
 <nav aria-label="Paginación de incidencias" class="mt-3">
     <ul class="pagination justify-content-center">
@@ -96,11 +105,9 @@
                 </a>
             </li>
         {% endif %}
-
         <li class="page-item disabled">
             <span class="page-link">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
         </li>
-
         {% if page_obj.has_next %}
             <li class="page-item">
                 <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado }}{% endif %}">
@@ -111,4 +118,44 @@
     </ul>
 </nav>
 {% endif %}
+
+<script>
+  (function() {
+    const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const ws = new WebSocket(proto + window.location.host + '/ws/incidencias/');
+    const statusEl = document.getElementById('ws-status-list');
+
+    const clasesEstado = {
+      'PENDIENTE': 'badge bg-warning text-dark',
+      'EN_PROCESO': 'badge bg-info text-dark',
+      'RESUELTA': 'badge bg-success',
+      'CERRADA': 'badge bg-secondary'
+    };
+
+    ws.onopen = () => {
+      if (statusEl) statusEl.textContent = '● Actualización en tiempo real activa';
+    };
+
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      const badge = document.getElementById('badge-estado-' + data.incidencia_id);
+      if (badge) {
+        badge.className = clasesEstado[data.estado] || 'badge bg-primary';
+        badge.textContent = data.estado_display || data.estado;
+      } else {
+        const alerta = document.getElementById('alerta-tiempo-real');
+        const texto = document.getElementById('alerta-tiempo-real-texto');
+        if (alerta && texto) {
+          texto.textContent = `Nueva actividad en vivo: "${data.titulo}" (${data.estado_display || data.estado})`;
+          alerta.classList.remove('d-none');
+          alerta.classList.add('d-flex');
+        }
+      }
+    };
+
+    ws.onclose = () => {
+      if (statusEl) statusEl.textContent = '○ Canal en tiempo real desconectado';
+    };
+  })();
+</script>
 {% endblock %}

@@ -2,37 +2,93 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6 mt-4">
-        <div class="card shadow-sm">
-            <div class="card-header bg-dark text-white text-center">
-                <h4>Registro de Nuevo Residente</h4>
+    <div class="col-md-7 col-lg-6 mt-2">
+        <div class="card overflow-hidden">
+            <div class="card-header bg-dark text-white py-3 px-4">
+                <h4 class="mb-0 fw-bold">Registro de Nuevo Residente</h4>
+                <small class="text-light opacity-75">Selecciona tu edificio, torre y apartamento sin escribir de más</small>
             </div>
-            <div class="card-body">
-                <form method="post">
+            <div class="card-body p-4">
+                <form method="post" id="form-registro">
                     {% csrf_token %}
-                    
-                    <!-- Renderizamos los campos estándar de usuario de Django -->
-                    {{ form.as_p }}
-                    
-                    <!-- Campos personalizados de nuestro modelo Perfil -->
+
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label fw-semibold">{{ field.label }}</label>
+                            {% if 'password' in field.name %}
+                                <div class="input-group">
+                                    {{ field }}
+                                    <button type="button" class="btn btn-outline-secondary toggle-pass" data-target="{{ field.id_for_label }}" aria-label="Mostrar contraseña">👁️</button>
+                                </div>
+                            {% else %}
+                                {{ field }}
+                            {% endif %}
+                            {% if field.help_text %}
+                                <div class="form-text small">{{ field.help_text|safe }}</div>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+
+                    {% if edificios %}
                     <div class="mb-3">
-                        <label for="edificio" class="form-label">Edificio:</label>
-                        <input type="text" name="edificio" id="edificio" class="form-control" placeholder="Ej: Torre A" required>
+                        <label for="edificio_id" class="form-label fw-semibold">Edificio</label>
+                        <select name="edificio_id" id="edificio_id" class="form-select" required>
+                            {% for edif in edificios %}
+                                <option value="{{ edif.id }}">{{ edif.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <label for="torre" class="form-label fw-semibold">Torre / Bloque</label>
+                            <select name="torre" id="torre" class="form-select" required>
+                                {% for t in torres_opciones %}
+                                    <option value="{{ t }}">{{ t }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="apartamento" class="form-label fw-semibold">Apartamento</label>
+                            <select name="apartamento" id="apartamento" class="form-select" required>
+                                {% for apto in apartamentos_opciones %}
+                                    <option value="Apto {{ apto }}">Apto {{ apto }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="piso_puerta" class="form-label">Piso y Apartamento / Puerta:</label>
-                        <input type="text" name="piso_puerta" id="piso_puerta" class="form-control" placeholder="Ej: Piso 3, Apto 302" required>
-                    </div>
-
-                    <button type="submit" class="btn btn-success w-100 mt-3">Registrarse</button>
+                    <button type="submit" class="btn btn-primary w-100 py-2 mt-2">Crear Cuenta</button>
                 </form>
-                
+
                 <div class="text-center mt-3">
-                    <small class="text-muted">¿Ya tienes una cuenta? <a href="{% url 'login' %}">Inicia sesión aquí</a></small>
+                    <small class="text-muted">¿Ya tienes una cuenta? <a href="{% url 'login' %}" class="fw-semibold text-decoration-none">Inicia sesión aquí</a></small>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+  (function() {
+    document.querySelectorAll('#form-registro input[type="text"], #form-registro input[type="password"]').forEach((inp) => {
+      if (!inp.classList.contains('form-control')) {
+        inp.classList.add('form-control');
+      }
+    });
+    document.querySelectorAll('.toggle-pass').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = document.getElementById(btn.dataset.target);
+        if (!input) return;
+        const esPassword = input.type === 'password';
+        input.type = esPassword ? 'text' : 'password';
+        btn.textContent = esPassword ? '🙈' : '👁️';
+      });
+    });
+  })();
+</script>
 {% endblock %}

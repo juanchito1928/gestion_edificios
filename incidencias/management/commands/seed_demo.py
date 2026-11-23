@@ -8,7 +8,7 @@ from incidencias.use_cases import asignar_tecnico, cambiar_estado, crear_inciden
 
 
 class Command(BaseCommand):
-    help = "Carga datos realistas de demostración (multi-edificio, roles e incidencias) de forma idempotente."
+    help = "Carga datos realistas de demostración de forma idempotente."
 
     @transaction.atomic
     def handle(self, *args, **options):
@@ -25,7 +25,6 @@ class Command(BaseCommand):
             nombre="Torre Empresarial Santa Bárbara",
         )
 
-        # Usuarios y roles en Edificio Norte
         admin_norte, _ = User.objects.get_or_create(
             username="admin_mirador",
             defaults={"email": "admin@mirador.local", "is_staff": True},
@@ -66,7 +65,6 @@ class Command(BaseCommand):
             defaults={"especialidad": "Hidráulica y Redes"},
         )
 
-        # Activar contexto RLS para Edificio Norte
         set_edificio_actual(ed_norte.id)
         with connection.cursor() as cursor:
             cursor.execute("SELECT set_config('app.current_edificio_id', %s, false);", [str(ed_norte.id)])
@@ -81,7 +79,7 @@ class Command(BaseCommand):
                 "Se presenta humedad constante en el muro del baño auxiliar.",
                 u_302.id,
             )
-            asignar_tecnico(inc1.id, tecnico.id, admin_norte)
+            asignar_tecnico(inc1.id, tecnico.id, admin_norte, forzar=True)
 
             inc2 = crear_incidencia(
                 residente_norte,
@@ -89,10 +87,9 @@ class Command(BaseCommand):
                 "No se escucha el audio desde el lobby hacia el apartamento.",
                 u_101.id,
             )
-            asignar_tecnico(inc2.id, tecnico.id, admin_norte)
+            asignar_tecnico(inc2.id, tecnico.id, admin_norte, forzar=True)
             cambiar_estado(inc2.id, "RESUELTA", admin_norte)
 
-        # Activar contexto RLS para Edificio Sur (Tenant aislado)
         set_edificio_actual(ed_sur.id)
         with connection.cursor() as cursor:
             cursor.execute("SELECT set_config('app.current_edificio_id', %s, false);", [str(ed_sur.id)])

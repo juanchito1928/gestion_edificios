@@ -1,49 +1,61 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container mt-4" style="max-width: 600px;">
-    <div class="card shadow-sm">
-        <div class="card-header bg-primary text-white">
-            <h4 class="mb-0">Reportar Nueva Incidencia</h4>
+<div class="container" style="max-width: 660px;">
+    <div class="card overflow-hidden">
+        <div class="card-header bg-primary text-white py-3 px-4">
+            <h4 class="mb-0 fw-bold">Reportar Nueva Incidencia</h4>
+            <small class="text-white-50">Tu unidad se autocompleta y puedes elegir áreas comunes del edificio</small>
         </div>
-        <div class="card-body">
+        <div class="card-body p-4">
             {% if messages %}
                 {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                    <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}">{{ message }}</div>
                 {% endfor %}
             {% endif %}
 
             <form method="POST" enctype="multipart/form-data">
                 {% csrf_token %}
-                
+
                 <div class="mb-3">
-                    <label for="titulo" class="form-label font-weight-bold">Título</label>
+                    <label for="titulo" class="form-label fw-semibold">Título</label>
                     <input type="text" name="titulo" id="titulo" class="form-control" required placeholder="Ej: Fuga de agua en el baño">
                 </div>
 
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label for="categoria" class="form-label fw-semibold">Categoría</label>
+                        <select name="categoria" id="categoria" class="form-select" required>
+                            {% for val, label in categorias %}
+                                <option value="{{ val }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="unidad" class="form-label fw-semibold">Ubicación (Tu Unidad o Área Común)</label>
+                        <select name="unidad" id="unidad" class="form-select" required>
+                            {% for unidad in unidades_disponibles %}
+                                <option value="{{ unidad.id }}" {% if unidad.id == unidad_por_defecto_id %}selected{% endif %}>
+                                    {{ unidad }}{% if unidad_usuario and unidad.id == unidad_usuario.id %} (Mi unidad){% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
                 <div class="mb-3">
-                    <label for="descripcion" class="form-label font-weight-bold">Descripción</label>
+                    <label for="descripcion" class="form-label fw-semibold">Descripción</label>
                     <textarea name="descripcion" id="descripcion" class="form-control" rows="4" required placeholder="Describe el detalle del problema..."></textarea>
                 </div>
 
                 <div class="mb-3">
-                    <label for="unidad" class="form-label font-weight-bold">Unidad / Apartamento</label>
-                    <select name="unidad" id="unidad" class="form-select" required>
-                        <option value="">-- Selecciona una unidad --</option>
-                        {% for unidad in unidades %}
-                            <option value="{{ unidad.id }}">{{ unidad }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label for="foto" class="form-label font-weight-bold">Foto / Evidencia (Opcional)</label>
+                    <label for="foto" class="form-label fw-semibold">Foto / Evidencia (Opcional)</label>
                     <input type="file" name="foto" id="foto" class="form-control" accept="image/*">
                 </div>
 
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-secondary">Cancelar</a>
-                    <button type="submit" class="btn btn-success">Guardar Reporte</button>
+                    <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-outline-secondary">Cancelar</a>
+                    <button type="submit" class="btn btn-primary px-4">Guardar Reporte</button>
                 </div>
             </form>
         </div>

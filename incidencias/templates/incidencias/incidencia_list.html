@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
     <div>
-        <h2 class="mb-0">Lista de Incidencias</h2>
+        <h2 class="mb-0 fw-bold">Incidencias del Edificio</h2>
         <small id="ws-status-list" class="text-muted">Conectando canal en vivo...</small>
     </div>
     <div class="d-flex gap-2">
@@ -16,35 +16,37 @@
     </div>
 </div>
 
-<!-- Buscador Full-Text + Trigramas y Filtro por Estado (Módulo 3) -->
-<form method="get" class="row g-2 mb-4">
-    <div class="col-md-6">
-        <input 
-            type="text" 
-            name="q" 
-            class="form-control" 
-            value="{{ request.GET.q|default:'' }}" 
-            placeholder="Buscar incidencias (ej. ascenzor, fuga de agua, tuberia)..."
-        >
+<div class="card mb-4">
+    <div class="card-body py-3">
+        <form method="get" class="row g-2">
+            <div class="col-md-6">
+                <input
+                    type="text"
+                    name="q"
+                    class="form-control"
+                    value="{{ request.GET.q|default:'' }}"
+                    placeholder="Buscar incidencias (ej. ascensor, fuga de agua, tubería)..."
+                >
+            </div>
+            <div class="col-md-3">
+                <select name="estado" class="form-select">
+                    <option value="">Todos los estados</option>
+                    <option value="PENDIENTE" {% if request.GET.estado == 'PENDIENTE' %}selected{% endif %}>Pendiente</option>
+                    <option value="EN_PROCESO" {% if request.GET.estado == 'EN_PROCESO' %}selected{% endif %}>En Proceso</option>
+                    <option value="RESUELTA" {% if request.GET.estado == 'RESUELTA' %}selected{% endif %}>Resuelta</option>
+                    <option value="CERRADA" {% if request.GET.estado == 'CERRADA' %}selected{% endif %}>Cerrada</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-dark w-100">Buscar</button>
+                {% if request.GET.q or request.GET.estado %}
+                    <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-outline-secondary">Limpiar</a>
+                {% endif %}
+            </div>
+        </form>
     </div>
-    <div class="col-md-3">
-        <select name="estado" class="form-select">
-            <option value="">Todos los estados</option>
-            <option value="PENDIENTE" {% if request.GET.estado == 'PENDIENTE' %}selected{% endif %}>Pendiente</option>
-            <option value="EN_PROCESO" {% if request.GET.estado == 'EN_PROCESO' %}selected{% endif %}>En Proceso</option>
-            <option value="RESUELTA" {% if request.GET.estado == 'RESUELTA' %}selected{% endif %}>Resuelta</option>
-            <option value="CERRADA" {% if request.GET.estado == 'CERRADA' %}selected{% endif %}>Cerrada</option>
-        </select>
-    </div>
-    <div class="col-md-3 d-flex gap-2">
-        <button type="submit" class="btn btn-dark w-100">Buscar</button>
-        {% if request.GET.q or request.GET.estado %}
-            <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-outline-secondary">Limpiar</a>
-        {% endif %}
-    </div>
-</form>
+</div>
 
-<!-- Banner dinámico cuando llega una nueva incidencia o cambio en vivo -->
 <div id="alerta-tiempo-real" class="alert alert-info d-none justify-content-between align-items-center" role="alert">
     <span id="alerta-tiempo-real-texto"></span>
     <button type="button" class="btn btn-sm btn-outline-primary" onclick="location.reload()">Actualizar listado</button>
@@ -53,31 +55,34 @@
 <div class="row" id="grid-incidencias">
     {% for incidencia in incidencias %}
     <div class="col-md-4 mb-4" id="card-incidencia-{{ incidencia.id }}">
-        <div class="card h-100 shadow-sm">
+        <div class="card h-100 overflow-hidden">
             {% if incidencia.foto %}
-                <img src="{{ incidencia.foto.url }}" class="card-img-top" alt="Foto de {{ incidencia.titulo }}" style="height: 200px; object-fit: cover;">
+                <img src="{{ incidencia.foto.url }}" class="card-img-top" alt="{{ incidencia.titulo }}" style="height: 190px; object-fit: cover;">
             {% endif %}
-            
+
             <div class="card-body">
-                <h5 class="card-title">
+                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                    <span class="badge bg-light text-dark border">{{ incidencia.categoria|default:"General" }}</span>
+                    <span id="badge-estado-{{ incidencia.id }}" class="badge {% if incidencia.estado == 'PENDIENTE' %}bg-warning text-dark{% elif incidencia.estado == 'RESUELTA' %}bg-success{% elif incidencia.estado == 'CERRADA' %}bg-secondary{% else %}bg-info text-dark{% endif %}">
+                        {{ incidencia.get_estado_display }}
+                    </span>
+                </div>
+                <h5 class="card-title fw-bold">
                     <a href="{% url 'incidencias:detalle_incidencia' incidencia.id %}" class="text-decoration-none text-dark">
                         {{ incidencia.titulo }}
                     </a>
                 </h5>
-                <h6 class="card-subtitle mb-2 mt-2">
-                    Estado: 
-                    <span id="badge-estado-{{ incidencia.id }}" class="badge {% if incidencia.estado == 'PENDIENTE' %}bg-warning text-dark{% elif incidencia.estado == 'RESUELTA' %}bg-success{% elif incidencia.estado == 'CERRADA' %}bg-secondary{% else %}bg-info text-dark{% endif %}">
-                        {{ incidencia.get_estado_display }}
-                    </span>
-                </h6>
-                <p class="card-text text-muted mt-3">
-                    {{ incidencia.descripcion|truncatechars:80 }}
+                <p class="card-text text-muted small mt-2 mb-2">
+                    {{ incidencia.descripcion|truncatechars:90 }}
                 </p>
+                {% if incidencia.tiempo_estimado %}
+                    <div class="small text-primary fw-semibold">⏱️ Estimado: {{ incidencia.tiempo_estimado }}</div>
+                {% endif %}
             </div>
-            <div class="card-footer bg-transparent d-flex justify-content-between">
+            <div class="card-footer bg-light d-flex justify-content-between py-2 px-3">
                 <small class="text-muted">Por: <b>{{ incidencia.reportado_por.username }}</b></small>
                 {% if incidencia.unidad %}
-                    <small class="text-muted">{{ incidencia.unidad.numero }}</small>
+                    <small class="text-muted fw-semibold">{{ incidencia.unidad.numero }}</small>
                 {% endif %}
             </div>
         </div>
@@ -88,7 +93,7 @@
             {% if request.GET.q or request.GET.estado %}
                 No se encontraron incidencias que coincidan con tu búsqueda.
             {% else %}
-                No hay incidencias reportadas en el edificio todavía. ¡Todo está en orden!
+                No hay incidencias reportadas en el edificio todavía.
             {% endif %}
         </div>
     </div>

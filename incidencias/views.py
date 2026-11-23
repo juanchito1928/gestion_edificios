@@ -20,6 +20,15 @@ from . import use_cases
 from .models import Comentario, Edificio, EventoIncidencia, Incidencia, Organizacion, Perfil, Tecnico, Unidad
 
 ROLES_PANEL = {'ADMIN_EDIFICIO', 'ADMIN', 'AUDITOR', 'TECNICO'}
+CATEGORIAS_INCIDENCIA = [
+    ('AGUA', 'Agua / Plomería'),
+    ('ELECTRICIDAD', 'Electricidad'),
+    ('ASCENSORES', 'Ascensores'),
+    ('LOCATIVO', 'Locativo / Mantenimiento'),
+    ('ASEO', 'Aseo / Zonas Comunes'),
+    ('SEGURIDAD', 'Seguridad'),
+    ('OTRO', 'Otro'),
+]
 
 
 def _obtener_rol(user):
@@ -27,9 +36,30 @@ def _obtener_rol(user):
     return getattr(perfil, 'rol', None)
 
 
+def _es_admin(user):
+    return bool(user.is_staff or user.is_superuser or _obtener_rol(user) in {'ADMIN_EDIFICIO', 'ADMIN'})
+
+
 def _verificar_acceso_panel(user):
     if not (user.is_staff or user.is_superuser or _obtener_rol(user) in ROLES_PANEL):
         raise PermissionDenied("No tienes permisos para acceder al panel de indicadores operativos.")
+
+
+def _tecnicos_disponibles_para_incidencia(incidencia):
+    qs = Tecnico.objects.select_related('usuario').prefetch_related('edificios_asignados')
+    if incidencia.edificio_id:
+        qs = qs.filter(Q(edificios_asignados__id=incidencia.edificio_id) | Q(edificios_asignados__isnull=True)).distinct()
+
+    categoria = (incidencia.categoria or '').strip().upper()
+    if categoria and categoria != 'OTRO':
+        qs = qs.filter(
+            Q(especialidad__icontains=categoria)
+            | Q(especialidad__iexact='GENERAL')
+            | Q(especialidad__isnull=True)
+            | Q(especialidad='')
+        )
+
+    return [t for t in qs if not use_cases.tecnico_esta_ocupado(t, excluir_incidencia_id=incidencia.id)]
 
 
 class IncidenciaListView(LoginRequiredMixin, ListView):
@@ -103,23 +133,71 @@ class IncidenciaDetailView(LoginRequiredMixin, DetailView):
             ),
         )
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        incidencia = self.object
+        context['es_admin'] = _es_admin(self.request.user)
+        context['tecnicos_disponibles'] = _tecnicos_disponibles_para_incidencia(incidencia)
+        return context
+
 
 @login_required
 def crear_incidencia_view(request):
     if _obtener_rol(request.user) == 'AUDITOR':
         raise PermissionDenied("El rol Auditor tiene acceso estricto de solo lectura.")
 
-    unidades = Unidad.objects.select_related('edificio').all()
+    perfil = getattr(request.user, 'perfil', None)
+    unidad_usuario = getattr(perfil, 'unidad', None)
+    edificio_usuario = getattr(perfil, 'edificio', None) or getattr(unidad_usuario, 'edificio', None)
+
+    unidades_qs = Unidad.objects.select_related('edificio').order_by('torre', 'numero')
+    if edificio_usuario:
+        unidades_qs = unidades_qs.filter(edificio=edificio_usuario)
+
+    areas_comunes = unidades_qs.filter(es_area_comun=True)
+    if not areas_comunes.exists() and edificio_usuario:
+        nombres_areas = ['Portería', 'Ascensor', 'Parqueadero', 'Salón Comunal', 'Zonas Verdes']
+        for nombre_area in nombres_areas:
+            Unidad.objects.get_or_create(
+                edificio=edificio_usuario,
+                torre='Área Común',
+                numero=nombre_area,
+                defaults={'es_area_comun': True},
+            )
+        areas_comunes = Unidad.objects.select_related('edificio').filter(
+            edificio=edificio_usuario,
+            es_area_comun=True,
+        ).order_by('numero')
+
+    unidades_disponibles = []
+    if unidad_usuario and not unidad_usuario.es_area_comun:
+        unidades_disponibles.append(unidad_usuario)
+    for area in areas_comunes:
+        if not unidad_usuario or area.id != unidad_usuario.id:
+            unidades_disponibles.append(area)
+    if not unidades_disponibles:
+        unidades_disponibles = list(unidades_qs)
+
+    unidad_por_defecto_id = unidad_usuario.id if unidad_usuario else (unidades_disponibles[0].id if unidades_disponibles else '')
+
+    context = {
+        'unidades_disponibles': unidades_disponibles,
+        'unidad_por_defecto_id': unidad_por_defecto_id,
+        'unidad_usuario': unidad_usuario,
+        'categorias': CATEGORIAS_INCIDENCIA,
+    }
 
     if request.method == 'POST':
         titulo = request.POST.get('titulo')
         descripcion = request.POST.get('descripcion')
+        categoria = request.POST.get('categoria')
+        tiempo_estimado = request.POST.get('tiempo_estimado')
         unidad_id = request.POST.get('unidad')
         foto = request.FILES.get('foto')
 
         if not unidad_id:
-            messages.error(request, "Debes seleccionar una unidad.")
-            return render(request, 'incidencias/incidencia_form.html', {'unidades': unidades})
+            messages.error(request, "Debes seleccionar una unidad o área común.")
+            return render(request, 'incidencias/incidencia_form.html', context)
 
         try:
             use_cases.crear_incidencia(
@@ -127,15 +205,17 @@ def crear_incidencia_view(request):
                 titulo=titulo,
                 descripcion=descripcion,
                 unidad_id=unidad_id,
-                foto=foto
+                foto=foto,
+                categoria=categoria,
+                tiempo_estimado=tiempo_estimado,
             )
             messages.success(request, "Incidencia creada correctamente.")
             return redirect('incidencias:lista_incidencias')
         except Exception as e:
             messages.error(request, f"Error al crear la incidencia: {e}")
-            return render(request, 'incidencias/incidencia_form.html', {'unidades': unidades})
+            return render(request, 'incidencias/incidencia_form.html', context)
 
-    return render(request, 'incidencias/incidencia_form.html', {'unidades': unidades})
+    return render(request, 'incidencias/incidencia_form.html', context)
 
 
 @login_required
@@ -148,8 +228,36 @@ def agregar_comentario(request, pk):
     if request.method == 'POST':
         texto = (request.POST.get('texto') or '').strip()
         nuevo_estado = request.POST.get('estado') or request.POST.get('nuevo_estado')
+        tecnico_id = (request.POST.get('tecnico_id') or '').strip()
+        tiempo_estimado = (request.POST.get('tiempo_estimado') or '').strip()
+        instrucciones_tecnico = (request.POST.get('instrucciones_tecnico') or '').strip()
 
         hubo_cambios = False
+
+        if tecnico_id and _es_admin(request.user):
+            try:
+                use_cases.asignar_tecnico(
+                    incidencia_id=pk,
+                    tecnico_id=int(tecnico_id),
+                    usuario_actor=request.user,
+                    tiempo_estimado=tiempo_estimado,
+                    instrucciones_tecnico=instrucciones_tecnico,
+                )
+                messages.success(request, "Técnico asignado, tiempo estimado y mensaje enviados.")
+                hubo_cambios = True
+            except (ValidationError, PermissionDenied, Tecnico.DoesNotExist) as e:
+                error_msg = e.messages[0] if hasattr(e, 'messages') else str(e)
+                messages.error(request, f"No se pudo asignar el técnico: {error_msg}")
+                hubo_cambios = True
+        elif (tiempo_estimado or instrucciones_tecnico) and _es_admin(request.user):
+            incidencia.refresh_from_db()
+            if tiempo_estimado:
+                incidencia.tiempo_estimado = tiempo_estimado
+            if instrucciones_tecnico:
+                incidencia.instrucciones_tecnico = instrucciones_tecnico
+            incidencia.save()
+            messages.success(request, "Tiempo estimado e instrucciones actualizados.")
+            hubo_cambios = True
 
         if texto:
             Comentario.objects.create(
@@ -160,24 +268,27 @@ def agregar_comentario(request, pk):
             messages.success(request, "Comentario registrado con éxito.")
             hubo_cambios = True
 
-        if nuevo_estado and nuevo_estado != incidencia.estado:
-            try:
-                use_cases.cambiar_estado(
-                    incidencia_id=pk,
-                    nuevo_estado=nuevo_estado,
-                    usuario_actor=request.user
-                )
-                messages.success(request, f"Estado actualizado correctamente a '{nuevo_estado}'.")
-                hubo_cambios = True
-            except (ValidationError, PermissionDenied) as e:
-                error_msg = e.messages[0] if hasattr(e, 'messages') else str(e)
-                messages.error(request, f"Transición rechazada: {error_msg}")
-                hubo_cambios = True
+        if nuevo_estado:
+            incidencia.refresh_from_db()
+            if nuevo_estado != incidencia.estado:
+                try:
+                    use_cases.cambiar_estado(
+                        incidencia_id=pk,
+                        nuevo_estado=nuevo_estado,
+                        usuario_actor=request.user
+                    )
+                    messages.success(request, f"Estado actualizado correctamente a '{nuevo_estado}'.")
+                    hubo_cambios = True
+                except (ValidationError, PermissionDenied) as e:
+                    error_msg = e.messages[0] if hasattr(e, 'messages') else str(e)
+                    messages.error(request, f"Transición rechazada: {error_msg}")
+                    hubo_cambios = True
 
         if not hubo_cambios:
-            messages.info(request, "No se realizó ninguna acción (el comentario estaba vacío y el estado no cambió).")
+            messages.info(request, "No se realizó ninguna acción.")
 
     return redirect('incidencias:detalle_incidencia', pk=pk)
+
 
 @login_required
 @require_POST
@@ -188,10 +299,9 @@ def eliminar_incidencia(request, pk):
 
     incidencia = get_object_or_404(Incidencia, pk=pk)
 
-    es_admin = request.user.is_staff or request.user.is_superuser or rol in ['ADMIN_EDIFICIO', 'ADMIN']
     es_autor_pendiente = (incidencia.reportado_por == request.user and incidencia.estado == 'PENDIENTE')
 
-    if not (es_admin or es_autor_pendiente):
+    if not (_es_admin(request.user) or es_autor_pendiente):
         raise PermissionDenied("No tienes permisos para eliminar esta incidencia.")
 
     titulo = incidencia.titulo
@@ -199,40 +309,63 @@ def eliminar_incidencia(request, pk):
     messages.success(request, f"Incidencia '{titulo}' eliminada correctamente.")
     return redirect('incidencias:lista_incidencias')
 
+
 def registro_usuario(request):
+    edificios = Edificio.objects.all().order_by('nombre')
+    torres_opciones = ['Torre A', 'Torre B', 'Torre C', 'Torre D', 'Bloque 1', 'Bloque 2']
+    apartamentos_opciones = [
+        f"{piso}{apto:02d}"
+        for piso in range(1, 11)
+        for apto in range(1, 7)
+    ]
+
+    context = {
+        'form': UserCreationForm(request.POST or None),
+        'edificios': edificios,
+        'torres_opciones': torres_opciones,
+        'apartamentos_opciones': apartamentos_opciones,
+    }
+
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
+        context['form'] = form
         if form.is_valid():
             user = form.save()
-            nombre_edificio = (request.POST.get('edificio') or 'Edificio Principal').strip()
-            piso_puerta = request.POST.get('piso_puerta', 'Sin especificar')
+            edificio_id = (request.POST.get('edificio_id') or '').strip()
+            torre = (request.POST.get('torre') or 'Torre A').strip()
+            apto = (request.POST.get('apartamento') or '101').strip()
 
             org, _ = Organizacion.objects.get_or_create(nombre="Organización Principal")
-            edificio_obj, _ = Edificio.objects.get_or_create(
-                nombre=nombre_edificio,
-                defaults={'organizacion': org}
+            if edificio_id:
+                edificio_obj = Edificio.objects.filter(pk=edificio_id).first() or Edificio.objects.first()
+            else:
+                edificio_obj = Edificio.objects.first()
+
+            if not edificio_obj:
+                edificio_obj = Edificio.objects.create(nombre='Edificio Principal', organizacion=org)
+
+            unidad_obj, _ = Unidad.objects.get_or_create(
+                edificio=edificio_obj,
+                torre=torre,
+                numero=apto,
+                defaults={'es_area_comun': False},
             )
 
             Perfil.objects.create(
                 usuario=user,
                 edificio=edificio_obj,
-                piso_puerta=piso_puerta
+                unidad=unidad_obj,
+                edificio_texto=edificio_obj.nombre,
+                piso_puerta=f"{torre} - {apto}",
             )
 
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             return redirect('incidencias:lista_incidencias')
-    else:
-        form = UserCreationForm()
 
-    return render(request, 'registration/registro.html', {'form': form})
+    return render(request, 'registration/registro.html', context)
 
-
-# ==============================================================================
-# MÓDULO 6: PANEL DE INDICADORES, SINCRONIZACIÓN OFFLINE Y PWA
-# ==============================================================================
 
 def _calcular_kpis(request):
-    """Calcula los 4 KPIs operativos mediante agregaciones en PostgreSQL con filtros."""
     qs = Incidencia.objects.select_related('edificio', 'tecnico_asignado__usuario')
 
     edificio_id = (request.GET.get('edificio') or '').strip()
@@ -254,7 +387,6 @@ def _calcular_kpis(request):
     resueltos_qs = qs.filter(estado__in=['RESUELTA', 'CERRADA'])
     resueltos_count = resueltos_qs.count()
 
-    # 1. Tiempo medio de resolución (MTTR en horas)
     duracion_expr = ExpressionWrapper(
         F('fecha_actualizacion') - F('fecha_creacion'),
         output_field=DurationField(),
@@ -262,13 +394,11 @@ def _calcular_kpis(request):
     mttr_agg = resueltos_qs.aggregate(promedio=Avg(duracion_expr))['promedio']
     mttr_horas = round(mttr_agg.total_seconds() / 3600, 1) if mttr_agg else 0.0
 
-    # 2. Cumplimiento de SLA (% de casos resueltos en <= 24h)
     dentro_sla = resueltos_qs.annotate(duracion=duracion_expr).filter(
         duracion__lte=timedelta(hours=24)
     ).count()
     cumplimiento_sla = round((dentro_sla / resueltos_count) * 100, 1) if resueltos_count else 100.0
 
-    # 3. Tasa de reapertura (% de incidencias que tuvieron evento de reapertura a PENDIENTE)
     reabiertas = (
         EventoIncidencia.objects.filter(
             incidencia__in=qs,
@@ -282,11 +412,9 @@ def _calcular_kpis(request):
     )
     tasa_reapertura = round((reabiertas / total) * 100, 1) if total else 0.0
 
-    # Distribución por estado para Chart.js
     por_estado_raw = qs.values('estado').annotate(cantidad=Count('id'))
     por_estado = {item['estado']: item['cantidad'] for item in por_estado_raw}
 
-    # Distribución por técnico para Chart.js
     por_tecnico_raw = (
         qs.filter(tecnico_asignado__isnull=False)
         .values('tecnico_asignado__usuario__username')
@@ -311,7 +439,6 @@ def _calcular_kpis(request):
 
 @login_required
 def panel_indicadores(request):
-    """Vista del Dashboard operativo con filtros y Chart.js."""
     _verificar_acceso_panel(request.user)
     kpis = _calcular_kpis(request)
     edificios = Edificio.objects.all()
@@ -333,7 +460,6 @@ def panel_indicadores(request):
 
 @login_required
 def api_indicadores_json(request):
-    """Endpoint JSON para actualizar Chart.js dinámicamente al filtrar."""
     _verificar_acceso_panel(request.user)
     return JsonResponse(_calcular_kpis(request))
 
@@ -341,10 +467,6 @@ def api_indicadores_json(request):
 @login_required
 @require_POST
 def sincronizar_comentario_offline(request, pk):
-    """
-    RETO AVANZADO: Recibe comentarios guardados en la cola local del técnico
-    cuando estuvo sin conexión y los persiste al volver la red.
-    """
     if _obtener_rol(request.user) == 'AUDITOR':
         return JsonResponse({'error': 'Solo lectura'}, status=403)
 
@@ -373,7 +495,6 @@ def sincronizar_comentario_offline(request, pk):
 
 
 def pwa_manifest(request):
-    """Manifiesto PWA para instalar VecinosApp en móvil/escritorio del técnico."""
     manifest = {
         "name": "VecinosApp Técnicos",
         "short_name": "VecinosApp",
@@ -393,7 +514,6 @@ def pwa_manifest(request):
 
 
 def pwa_service_worker(request):
-    """Service Worker mínimo para caché offline de activos y vistas críticas del técnico."""
     sw_code = """
 const CACHE_NAME = 'vecinosapp-tecnico-v1';
 const ASSETS_TO_CACHE = ['/incidencias/', '/manifest.json'];

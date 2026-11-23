@@ -1,17 +1,16 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container mt-4" style="max-width: 800px;">
+<div class="container" style="max-width: 860px;">
 
-    <!-- Barra Superior de Acciones -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-outline-secondary btn-sm">
             &larr; Volver al listado
         </a>
 
-        {% if user.is_staff or user.is_superuser or user.perfil.rol in 'ADMIN_EDIFICIO,ADMIN' or incidencia.reportado_por == user and incidencia.estado == 'PENDIENTE' %}
+        {% if es_admin or incidencia.reportado_por == user and incidencia.estado == 'PENDIENTE' %}
             {% if user.perfil.rol != 'AUDITOR' %}
-                <form method="post" action="{% url 'incidencias:eliminar_incidencia' incidencia.pk %}" onsubmit="return confirm('¿Seguro que deseas eliminar esta incidencia? Esta acción no se puede deshacer.');">
+                <form method="post" action="{% url 'incidencias:eliminar_incidencia' incidencia.pk %}" onsubmit="return confirm('¿Seguro que deseas eliminar esta incidencia?');">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-outline-danger btn-sm">
                         🗑️ Eliminar Incidencia
@@ -21,7 +20,6 @@
         {% endif %}
     </div>
 
-    <!-- Bloque de Notificaciones / Mensajes -->
     {% if messages %}
         {% for message in messages %}
             <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
@@ -30,27 +28,79 @@
         {% endfor %}
     {% endif %}
 
-    <!-- Alerta de Cola Offline (Reto Avanzado) -->
     <div id="alerta-offline" class="alert alert-warning d-none" role="alert">
         <strong>Modo sin conexión:</strong> Tienes <span id="contador-offline">0</span> comentario(s) guardado(s) localmente. Se sincronizarán automáticamente al recuperar internet.
     </div>
 
-    <!-- Detalle de la Incidencia -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <h4 class="mb-0">{{ incidencia.titulo }}</h4>
-            <span id="detail-badge-header" class="badge bg-light text-dark fs-6">{{ incidencia.estado }}</span>
+    <div class="card mb-4 overflow-hidden">
+        <div class="card-header bg-dark text-white py-3 px-4 d-flex justify-content-between align-items-center">
+            <div>
+                <span class="badge bg-info text-dark me-2">{{ incidencia.categoria|default:"GENERAL" }}</span>
+                <h4 class="d-inline-block mb-0 align-middle fw-bold">{{ incidencia.titulo }}</h4>
+            </div>
+            <span id="detail-badge-header" class="badge bg-light text-dark fs-6">{{ incidencia.get_estado_display }}</span>
         </div>
-        <div class="card-body">
-            <p><strong>Reportado por:</strong> {{ incidencia.reportado_por.username }}</p>
-            <p><strong>Unidad:</strong> {{ incidencia.unidad }}</p>
-            <p><strong>Técnico asignado:</strong> <span id="detail-tecnico">{{ incidencia.tecnico_asignado.usuario.username|default:"Sin asignar" }}</span></p>
-            <p><strong>Fecha de reporte:</strong> {{ incidencia.fecha_creacion|date:"d/m/Y H:i" }}</p>
-            <p><strong>Estado Actual:</strong> <span id="detail-estado-texto" class="fw-bold text-primary">{{ incidencia.estado }}</span> <small id="ws-detail-live" class="text-success ms-2"></small></p>
+        <div class="card-body p-4">
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <div class="p-3 bg-light rounded-3 h-100">
+                        <div class="small text-muted">Reportado por</div>
+                        <div class="fw-semibold">{{ incidencia.reportado_por.username }}</div>
+                        <div class="small text-muted mt-2">Unidad / Ubicación</div>
+                        <div class="fw-semibold">{{ incidencia.unidad|default:"No especificada" }}</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="p-3 bg-light rounded-3 h-100">
+                        <div class="small text-muted">Hora de reporte</div>
+                        <div class="fw-semibold">{{ incidencia.fecha_creacion|date:"d/m/Y H:i" }}</div>
+                        <div class="small text-muted mt-2">Hora en que se envió / asignó técnico</div>
+                        <div id="detail-fecha-asignacion" class="fw-semibold">
+                            {% if incidencia.fecha_asignacion %}{{ incidencia.fecha_asignacion|date:"d/m/Y H:i" }}{% else %}Aún no asignado{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <div class="p-3 border rounded-3 h-100">
+                        <div class="small text-muted">Técnico asignado</div>
+                        <div id="detail-tecnico" class="fw-bold text-primary">
+                            {% if incidencia.tecnico_asignado %}
+                                {{ incidencia.tecnico_asignado.usuario.username }} ({{ incidencia.tecnico_asignado.especialidad|default:"General" }})
+                            {% else %}
+                                Sin asignar
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="p-3 border rounded-3 h-100">
+                        <div class="small text-muted">Tiempo estimado de solución</div>
+                        <div id="detail-tiempo-estimado" class="fw-bold text-dark">
+                            {{ incidencia.tiempo_estimado|default:"Por definir" }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-3 rounded-3 mb-3" style="background: #eff6ff; border: 1px solid #bfdbfe;">
+                <div class="small fw-bold text-primary mb-1">Mensaje / Instrucciones para el técnico</div>
+                <div id="detail-instrucciones-tecnico" class="text-dark">
+                    {{ incidencia.instrucciones_tecnico|default:"Sin instrucciones adicionales por ahora." }}
+                </div>
+            </div>
+
+            <p class="mb-2">
+                <strong>Estado Actual:</strong>
+                <span id="detail-estado-texto" class="fw-bold text-primary">{{ incidencia.get_estado_display }}</span>
+                <small id="ws-detail-live" class="text-success ms-2"></small>
+            </p>
             <hr>
-            <p><strong>Descripción:</strong></p>
-            <p class="card-text">{{ incidencia.descripcion }}</p>
-            
+            <p class="fw-semibold mb-1">Descripción:</p>
+            <p class="card-text mb-0">{{ incidencia.descripcion }}</p>
+
             {% if incidencia.foto %}
                 <div class="mt-3">
                     <strong>Evidencia adjunta:</strong><br>
@@ -60,22 +110,51 @@
         </div>
     </div>
 
-    <!-- Formulario de Gestión -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-dark text-white">
-            <h5 class="mb-0">Gestión de la Incidencia</h5>
+    <div class="card mb-4 overflow-hidden">
+        <div class="card-header bg-primary text-white py-3 px-4">
+            <h5 class="mb-0 fw-bold">Gestión de la Incidencia</h5>
         </div>
-        <div class="card-body">
+        <div class="card-body p-4">
             <form id="form-gestion-incidencia" method="POST" action="{% url 'incidencias:agregar_comentario' incidencia.pk %}">
                 {% csrf_token %}
-                
+
+                {% if es_admin %}
+                <div class="p-3 mb-3 bg-light rounded-3 border">
+                    <div class="fw-bold mb-2">Asignación de Técnico Disponible, Tiempo Estimado y Mensaje</div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="tecnico_id" class="form-label fw-semibold">Técnico disponible</label>
+                            <select name="tecnico_id" id="tecnico_id" class="form-select">
+                                <option value="">-- Seleccionar técnico disponible --</option>
+                                {% for tec in tecnicos_disponibles %}
+                                    <option value="{{ tec.id }}">
+                                        {{ tec.usuario.username }} — {{ tec.especialidad|default:"General" }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if not tecnicos_disponibles %}
+                                <div class="form-text text-danger">No hay técnicos disponibles para esta categoría en este momento (todos tienen una incidencia activa).</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="tiempo_estimado" class="form-label fw-semibold">Tiempo estimado para resolver</label>
+                            <input type="text" name="tiempo_estimado" id="tiempo_estimado" class="form-control" value="{{ incidencia.tiempo_estimado|default:'' }}" placeholder="Ej: 2 horas, 1 día">
+                        </div>
+                        <div class="col-12">
+                            <label for="instrucciones_tecnico" class="form-label fw-semibold">Mensaje / Instrucciones para el técnico</label>
+                            <textarea name="instrucciones_tecnico" id="instrucciones_tecnico" class="form-control" rows="2" placeholder="Escribe el mensaje o detalle para el técnico...">{{ incidencia.instrucciones_tecnico|default:'' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="mb-3">
-                    <label for="texto" class="form-label fw-bold">Agregar Comentario (Opcional - soporta modo offline)</label>
+                    <label for="texto" class="form-label fw-semibold">Agregar Comentario (Opcional - soporta modo offline)</label>
                     <textarea name="texto" id="texto" class="form-control" rows="3" placeholder="Escribe tus observaciones aquí si lo deseas..."></textarea>
                 </div>
 
                 <div class="mb-3">
-                    <label for="estado" class="form-label fw-bold">Cambiar Estado (Opcional)</label>
+                    <label for="estado" class="form-label fw-semibold">Cambiar Estado (Opcional)</label>
                     <select name="estado" id="estado" class="form-select">
                         <option value="">-- Mantener estado actual ({{ incidencia.estado }}) --</option>
                         <option value="PENDIENTE">PENDIENTE</option>
@@ -86,21 +165,20 @@
                 </div>
 
                 <div class="d-flex justify-content-between">
-                    <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-secondary">Volver al listado</a>
-                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                    <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-outline-secondary">Volver al listado</a>
+                    <button type="submit" class="btn btn-primary px-4">Guardar Cambios</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Historial de Comentarios -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-light">
-            <h5 class="mb-0">Comentarios Registrados</h5>
+    <div class="card mb-4 overflow-hidden">
+        <div class="card-header bg-light py-3 px-4">
+            <h5 class="mb-0 fw-bold">Comentarios Registrados</h5>
         </div>
         <div id="lista-comentarios" class="list-group list-group-flush">
             {% for comentario in incidencia.comentarios.all %}
-                <div class="list-group-item">
+                <div class="list-group-item py-3 px-4">
                     <div class="d-flex justify-content-between">
                         <strong>{{ comentario.autor.username }}</strong>
                         <small class="text-muted">{{ comentario.fecha_creacion|date:"d/m/Y H:i" }}</small>
@@ -108,7 +186,7 @@
                     <p class="mb-0 mt-1">{{ comentario.texto }}</p>
                 </div>
             {% empty %}
-                <div id="sin-comentarios" class="list-group-item text-muted text-center py-3">No hay comentarios registrados para esta incidencia.</div>
+                <div id="sin-comentarios" class="list-group-item text-muted text-center py-4">No hay comentarios registrados para esta incidencia.</div>
             {% endfor %}
         </div>
     </div>
@@ -122,21 +200,25 @@
     const syncUrl = "{% url 'incidencias:sincronizar_offline' incidencia.pk %}";
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-    // 1. WebSocket en tiempo real para esta incidencia
     const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
     const ws = new WebSocket(proto + window.location.host + '/ws/incidencias/' + incidenciaId + '/');
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
-      document.getElementById('detail-badge-header').textContent = data.estado;
-      document.getElementById('detail-estado-texto').textContent = data.estado;
+      document.getElementById('detail-badge-header').textContent = data.estado_display || data.estado;
+      document.getElementById('detail-estado-texto').textContent = data.estado_display || data.estado;
       if (data.tecnico) {
         document.getElementById('detail-tecnico').textContent = data.tecnico;
+      }
+      if (data.tiempo_estimado) {
+        document.getElementById('detail-tiempo-estimado').textContent = data.tiempo_estimado;
+      }
+      if (data.instrucciones_tecnico) {
+        document.getElementById('detail-instrucciones-tecnico').textContent = data.instrucciones_tecnico;
       }
       const liveTag = document.getElementById('ws-detail-live');
       if (liveTag) liveTag.textContent = '● Actualizado en vivo';
     };
 
-    // 2. Cola local de comentarios sin conexión (Reto Avanzado)
     function obtenerCola() {
       try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
       catch { return []; }
@@ -179,7 +261,7 @@
             if (sinMsg) sinMsg.remove();
             const lista = document.getElementById('lista-comentarios');
             lista.insertAdjacentHTML('beforeend', `
-              <div class="list-group-item border-start border-success border-3">
+              <div class="list-group-item border-start border-success border-3 py-3 px-4">
                 <div class="d-flex justify-content-between">
                   <strong>${creado.autor}</strong>
                   <small class="text-success">${creado.fecha}</small>

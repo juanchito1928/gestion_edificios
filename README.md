@@ -58,7 +58,6 @@
 1. **Clonar el repositorio:**
     ```bash
    git clone https://github.com/juanchito1928/gestion_edificios.git
-cd gestion_edificios
    cd gestion_edificios
    ```
 

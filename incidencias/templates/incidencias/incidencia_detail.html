@@ -4,7 +4,7 @@
 <div class="container" style="max-width: 860px;">
 
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-outline-secondary btn-sm">
+        <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-gh-secondary btn-sm">
             &larr; Volver al listado
         </a>
 
@@ -33,17 +33,17 @@
     </div>
 
     <div class="card mb-4 overflow-hidden">
-        <div class="card-header bg-dark text-white py-3 px-4 d-flex justify-content-between align-items-center">
+        <div class="card-header py-3 px-4 d-flex justify-content-between align-items-center">
             <div>
                 <span class="badge bg-info text-dark me-2">{{ incidencia.categoria|default:"GENERAL" }}</span>
                 <h4 class="d-inline-block mb-0 align-middle fw-bold">{{ incidencia.titulo }}</h4>
             </div>
-            <span id="detail-badge-header" class="badge bg-light text-dark fs-6">{{ incidencia.get_estado_display }}</span>
+            <span id="detail-badge-header" class="badge bg-secondary fs-6">{{ incidencia.get_estado_display }}</span>
         </div>
         <div class="card-body p-4">
             <div class="row g-3 mb-3">
                 <div class="col-md-6">
-                    <div class="p-3 bg-light rounded-3 h-100">
+                    <div class="p-3 rounded-3 h-100" style="background-color: var(--gh-surface-subtle); border: 1px solid var(--gh-border);">
                         <div class="small text-muted">Reportado por</div>
                         <div class="fw-semibold">{{ incidencia.reportado_por.username }}</div>
                         <div class="small text-muted mt-2">Unidad / Ubicación</div>
@@ -51,7 +51,7 @@
                     </div>
                 </div>
                 <div class="col-md-6">
-                    <div class="p-3 bg-light rounded-3 h-100">
+                    <div class="p-3 rounded-3 h-100" style="background-color: var(--gh-surface-subtle); border: 1px solid var(--gh-border);">
                         <div class="small text-muted">Hora de reporte</div>
                         <div class="fw-semibold">{{ incidencia.fecha_creacion|date:"d/m/Y H:i" }}</div>
                         <div class="small text-muted mt-2">Hora en que se envió / asignó técnico</div>
@@ -64,9 +64,9 @@
 
             <div class="row g-3 mb-3">
                 <div class="col-md-6">
-                    <div class="p-3 border rounded-3 h-100">
+                    <div class="p-3 rounded-3 h-100" style="background-color: var(--gh-surface-subtle); border: 1px solid var(--gh-border);">
                         <div class="small text-muted">Técnico asignado</div>
-                        <div id="detail-tecnico" class="fw-bold text-primary">
+                        <div id="detail-tecnico" class="fw-bold" style="color: var(--gh-accent);">
                             {% if incidencia.tecnico_asignado %}
                                 {{ incidencia.tecnico_asignado.usuario.username }} ({{ incidencia.tecnico_asignado.especialidad|default:"General" }})
                             {% else %}
@@ -76,25 +76,25 @@
                     </div>
                 </div>
                 <div class="col-md-6">
-                    <div class="p-3 border rounded-3 h-100">
+                    <div class="p-3 rounded-3 h-100" style="background-color: var(--gh-surface-subtle); border: 1px solid var(--gh-border);">
                         <div class="small text-muted">Tiempo estimado de solución</div>
-                        <div id="detail-tiempo-estimado" class="fw-bold text-dark">
+                        <div id="detail-tiempo-estimado" class="fw-bold">
                             {{ incidencia.tiempo_estimado|default:"Por definir" }}
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="p-3 rounded-3 mb-3" style="background: #eff6ff; border: 1px solid #bfdbfe;">
-                <div class="small fw-bold text-primary mb-1">Mensaje / Instrucciones para el técnico</div>
-                <div id="detail-instrucciones-tecnico" class="text-dark">
+            <div class="p-3 rounded-3 mb-3" style="background-color: var(--gh-surface-subtle); border: 1px solid var(--gh-border);">
+                <div class="small fw-bold mb-1" style="color: var(--gh-accent);">Mensaje / Instrucciones para el técnico</div>
+                <div id="detail-instrucciones-tecnico">
                     {{ incidencia.instrucciones_tecnico|default:"Sin instrucciones adicionales por ahora." }}
                 </div>
             </div>
 
             <p class="mb-2">
                 <strong>Estado Actual:</strong>
-                <span id="detail-estado-texto" class="fw-bold text-primary">{{ incidencia.get_estado_display }}</span>
+                <span id="detail-estado-texto" class="fw-bold" style="color: var(--gh-accent);">{{ incidencia.get_estado_display }}</span>
                 <small id="ws-detail-live" class="text-success ms-2"></small>
             </p>
             <hr>
@@ -111,7 +111,7 @@
     </div>
 
     <div class="card mb-4 overflow-hidden">
-        <div class="card-header bg-primary text-white py-3 px-4">
+        <div class="card-header py-3 px-4">
             <h5 class="mb-0 fw-bold">Gestión de la Incidencia</h5>
         </div>
         <div class="card-body p-4">
@@ -119,7 +119,7 @@
                 {% csrf_token %}
 
                 {% if es_admin %}
-                <div class="p-3 mb-3 bg-light rounded-3 border">
+                <div class="p-3 mb-3 rounded-3" style="background-color: var(--gh-surface-subtle); border: 1px solid var(--gh-border);">
                     <div class="fw-bold mb-2">Asignación de Técnico Disponible, Tiempo Estimado y Mensaje</div>
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -153,6 +153,7 @@
                     <textarea name="texto" id="texto" class="form-control" rows="3" placeholder="Escribe tus observaciones aquí si lo deseas..."></textarea>
                 </div>
 
+                {% if es_admin or user.is_staff or user.is_superuser or user.perfil.rol in 'ADMIN_EDIFICIO,ADMIN,TECNICO' %}
                 <div class="mb-3">
                     <label for="estado" class="form-label fw-semibold">Cambiar Estado (Opcional)</label>
                     <select name="estado" id="estado" class="form-select">
@@ -163,17 +164,18 @@
                         <option value="CERRADA">CERRADA</option>
                     </select>
                 </div>
+                {% endif %}
 
                 <div class="d-flex justify-content-between">
-                    <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-outline-secondary">Volver al listado</a>
-                    <button type="submit" class="btn btn-primary px-4">Guardar Cambios</button>
+                    <a href="{% url 'incidencias:lista_incidencias' %}" class="btn btn-gh-secondary">Volver al listado</a>
+                    <button type="submit" class="btn btn-gh-primary px-4">Guardar Cambios</button>
                 </div>
             </form>
         </div>
     </div>
 
     <div class="card mb-4 overflow-hidden">
-        <div class="card-header bg-light py-3 px-4">
+        <div class="card-header py-3 px-4">
             <h5 class="mb-0 fw-bold">Comentarios Registrados</h5>
         </div>
         <div id="lista-comentarios" class="list-group list-group-flush">

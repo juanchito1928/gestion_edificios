@@ -20,6 +20,7 @@ from . import use_cases
 from .models import Comentario, Edificio, EventoIncidencia, Incidencia, Organizacion, Perfil, Tecnico, Unidad
 
 ROLES_PANEL = {'ADMIN_EDIFICIO', 'ADMIN', 'AUDITOR', 'TECNICO'}
+ROLES_CAMBIO_ESTADO = {'ADMIN_EDIFICIO', 'ADMIN', 'TECNICO'}
 CATEGORIAS_INCIDENCIA = [
     ('AGUA', 'Agua / Plomería'),
     ('ELECTRICIDAD', 'Electricidad'),
@@ -38,6 +39,10 @@ def _obtener_rol(user):
 
 def _es_admin(user):
     return bool(user.is_staff or user.is_superuser or _obtener_rol(user) in {'ADMIN_EDIFICIO', 'ADMIN'})
+
+
+def _puede_cambiar_estado(user):
+    return bool(_es_admin(user) or _obtener_rol(user) in ROLES_CAMBIO_ESTADO)
 
 
 def _verificar_acceso_panel(user):
@@ -137,6 +142,7 @@ class IncidenciaDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         incidencia = self.object
         context['es_admin'] = _es_admin(self.request.user)
+        context['puede_cambiar_estado'] = _puede_cambiar_estado(self.request.user)
         context['tecnicos_disponibles'] = _tecnicos_disponibles_para_incidencia(incidencia)
         return context
 
@@ -227,7 +233,7 @@ def agregar_comentario(request, pk):
 
     if request.method == 'POST':
         texto = (request.POST.get('texto') or '').strip()
-        nuevo_estado = request.POST.get('estado') or request.POST.get('nuevo_estado')
+        nuevo_estado = (request.POST.get('estado') or request.POST.get('nuevo_estado') or '').strip()
         tecnico_id = (request.POST.get('tecnico_id') or '').strip()
         tiempo_estimado = (request.POST.get('tiempo_estimado') or '').strip()
         instrucciones_tecnico = (request.POST.get('instrucciones_tecnico') or '').strip()
@@ -269,6 +275,10 @@ def agregar_comentario(request, pk):
             hubo_cambios = True
 
         if nuevo_estado:
+            if not _puede_cambiar_estado(request.user):
+                messages.error(request, "Los residentes no tienen permiso para cambiar el estado de la incidencia.")
+                return redirect('incidencias:detalle_incidencia', pk=pk)
+
             incidencia.refresh_from_db()
             if nuevo_estado != incidencia.estado:
                 try:
@@ -312,7 +322,7 @@ def eliminar_incidencia(request, pk):
 
 def registro_usuario(request):
     edificios = Edificio.objects.all().order_by('nombre')
-    torres_opciones = ['Torre A', 'Torre B', 'Torre C', 'Torre D', 'Bloque 1', 'Bloque 2']
+    torres_opciones = ['Torre A', 'Torre B']
     apartamentos_opciones = [
         f"{piso}{apto:02d}"
         for piso in range(1, 11)

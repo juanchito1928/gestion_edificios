@@ -1,40 +1,90 @@
-# VecinosApp - Sistema de Gestión de Edificios e Incidencias
+# TorreOps — Sistema de Gestión Operativa de Edificios
 
-Plataforma web desarrollada en **Django** para la administración de edificios, permitiendo a los residentes reportar incidencias (con soporte para archivos multimedia y categorización) y a los administradores gestionar su seguimiento mediante roles y comentarios.
-
----
-
-## Tecnologías Utilizadas
-* **Python** (v3.13+)
-* **Django** (v5.0+)
-* **Bootstrap 5** (Diseño frontend)
-* **MySQL** (Base de datos relacional)
-* **Pillow** (Gestión de imágenes)
+**TorreOps** (`gestion_edificios`) es una aplicación web progresiva (PWA) desarrollada en **Django** y **PostgreSQL** para la administración de incidencias residenciales, asignación de técnicos, control de acceso por roles y monitoreo operativo en tiempo real.
 
 ---
 
-## Guía de Instalación y Configuración
-
-Para poner en marcha el proyecto localmente, primero debes clonar el repositorio en tu equipo con `git clone <url-de-tu-repositorio>` y entrar a la carpeta del proyecto (`cd gestion_edificios`). A continuación, crea y activa un entorno virtual ejecutando `python -m venv venv` seguido de `venv\Scripts\activate`. Una vez activo el entorno, instala las dependencias necesarias ejecutando `pip install django mysqlclient pillow` (o usando el archivo de requerimientos con `pip install -r requirements.txt`). Después, configura tu servidor MySQL creando una base de datos llamada `gestion_edificios` y verifica que tus credenciales coincidan en el archivo `vecinosapp/settings.py`. Procede a aplicar las migraciones ejecutando `python manage.py makemigrations` y `python manage.py migrate`. Para administrar el sistema con permisos totales, crea un superusuario ejecutando `python manage.py createsuperuser` y completando tus datos. Finalmente, arranca el servidor de desarrollo con `python manage.py runserver` y abre tu navegador web en la dirección `http://127.0.0.1:8000/`.
+## Tabla de Contenidos
+1. [Evolución por Módulos (M1 – M10+)](#evolución-por-módulos-m1--m10)
+2. [Arquitectura y Stack Tecnológico](#arquitectura-y-stack-tecnológico)
+3. [Roles y Control de Permisos](#roles-y-control-de-permisos)
+4. [Instalación y Ejecución Local](#instalación-y-ejecución-local)
+5. [Ejecución con Docker](#ejecución-con-docker)
+6. [Pruebas Automatizadas](#pruebas-automatizadas)
+7. [Autores](#autores)
 
 ---
 
-## Capturas de Pantalla de la Interfaz
+## Evolución por Módulos (M1 – M10+)
 
-1. **Forulario de Incidencias:** 
-   ![Formulario incidencias](img/lista.png)
-   
-2. **Formulario de Registro / Login:** 
-   ![Login](img/login.png)
-   
-3. **Detalle y Comentarios:** 
-   ![Estado](img/estado.png)
+* **Módulo 1 — Configuración Inicial y Modelado Base:** Estructura del proyecto Django (`vecinosapp`), configuración de entornos y definición de modelos principales: `Organizacion`, `Edificio`, `Unidad` (incluyendo áreas comunes), `Perfil`, `Tecnico`, `Incidencia`, `Comentario` y `EventoIncidencia`.
+* **Módulo 2 — Gestión de Incidencias y Reglas de Negocio (`use_cases.py`):** Creación de reportes con evidencia fotográfica, categorías (`AGUA`, `ELECTRICIDAD`, `ASCENSORES`, `LOCATIVO`, `ASEO`, `SEGURIDAD`, `OTRO`), validación de transiciones de estado (`PENDIENTE` → `EN_PROCESO` → `RESUELTA` → `CERRADA`) y prevención de doble asignación a técnicos ocupados.
+* **Módulo 3 — Autenticación, Registro y Control de Acceso (RBAC):** Flujo de inicio de sesión, registro guiado de residentes con selección de edificio, torre (`Torre A`, `Torre B`) y apartamento, aislamiento de consultas por rol y soporte de autenticación en dos pasos (OTP).
+* **Módulo 4 — API REST y Validación Basada en Propiedades:** Endpoints RESTful con Django REST Framework (`api/`), serializadores, permisos por rol y pruebas automatizadas de contratos de API (Schemathesis).
+* **Módulo 5 — Comunicación en Tiempo Real y Mensajería (`mensajeria`):** Integración de Django Channels y WebSockets (`/ws/incidencias/<id>/`) para actualizar en vivo estados, asignación de técnicos, tiempos estimados e instrucciones sin recargar la página.
+* **Módulo 6 — Búsqueda Avanzada en PostgreSQL:** Búsqueda de texto completo (`SearchVector`, `SearchQuery`, `SearchRank`) en español combinada con similitud de trigramas (`TrigramSimilarity`) para tolerancia a errores tipográficos en títulos y descripciones.
+* **Módulo 7 — Panel de Indicadores Operativos (KPIs):** Dashboard analítico (`/panel-indicadores/`) con métricas de casos totales, casos abiertos, **MTTR** (Tiempo Medio de Resolución), cumplimiento de **SLA** (< 24h), tasa de reapertura y carga por técnico con filtros dinámicos.
+* **Módulo 8 — Contenerización y Despliegue:** Configuración de `Dockerfile`, `.dockerignore` y plantilla de variables de entorno (`.env.example`) para despliegue reproducible.
+* **Módulo 9 — Aplicación Web Progresiva (PWA) y Modo Offline:** Incorporación de `manifest.json` y Service Worker (`sw.js`), indicador visual de estado de red (`En línea` / `Sin conexión`) y cola local (`localStorage`) con sincronización automática de comentarios al recuperar conexión.
+* **Módulo 10 — Identidad TorreOps, UI GitHub Dark y Refinamiento de Seguridad:**
+  * Nueva identidad visual **TorreOps** con logo vectorial SVG en barra de navegación (`base.html`), pantalla de inicio de sesión (`login.html`) y manifiesto PWA.
+  * Estética **GitHub Dark** (`#0d1117`, `#161b22`, `#21262d`, `#30363d`) con alto contraste en tarjetas, formularios, alertas y etiquetas de estado.
+  * Bloqueo en frontend (`incidencia_detail.html`) y backend (`agregar_comentario` y `_puede_cambiar_estado`) para impedir que los residentes modifiquen el estado de las incidencias.
 
-4. **Panel de Admin:** 
-   ![Admin](img/admin.png)
+---
 
-5. **Formulario para registrarse:** 
-   ![Registrarse](img/registrarse.png)
+## Arquitectura y Stack Tecnológico
 
-6. **Incidencias:** 
-   ![Incidencias](img/incidencias.png)
+* **Backend:** Python 3.13, Django 6.0, Django REST Framework, Django Channels (ASGI/WebSockets).
+* **Base de Datos:** PostgreSQL (con búsqueda de texto completo y `pg_trgm`).
+* **Frontend:** HTML5, CSS3 personalizado (GitHub Dark Theme + SVG), Bootstrap 5.3, JavaScript Vanilla (WebSockets + Offline Sync).
+* **Infraestructura & Calidad:** Docker, Service Workers (PWA), Django TestCase / Schemathesis.
+
+---
+
+## Roles y Control de Permisos
+
+| Rol | Visualización | Crear / Comentar | Asignar Técnico | Cambiar Estado | Panel KPIs |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Residente** | Solo sus reportes | ✅ | ❌ | ❌ | ❌ |
+| **Técnico** | Solo incidencias asignadas | ✅ | ❌ | ✅ | ✅ |
+| **Admin Edificio / Admin** | Todas las incidencias | ✅ | ✅ | ✅ | ✅ |
+| **Auditor** | Todas (solo lectura) | ❌ | ❌ | ❌ | ✅ |
+
+---
+
+## Instalación y Ejecución Local
+
+1. **Clonar el repositorio:**
+   git clone 
+   [https://github.com/juanchito1928/gestion_edificios.git]
+   (https://github.com/juanchito1928/gestion_edificios.git)
+   cd gestion_edificios
+
+2. **Crear y activar el entorno virtual:**
+   python -m venv venv
+   # En Windows (PowerShell):
+   .\venv\Scripts\Activate.ps1
+   # En Linux / macOS:
+   source venv/bin/activate
+
+3. **Instalar dependencias:**
+    pip install -r requirements.txt
+
+4. **Aplicar migraciones y crear superusuario:**
+    python manage.py migrate
+    python manage.py createsuperuser
+
+5. **Iniciar el servidor local:**
+    python manage.py runserver
+
+6. **Ejecucion con Docker:**
+    docker build -t torreops .
+    docker run --env-file .env -p 8000:8000 torreops
+
+7. **Pruebas Automatizadas:**
+    python manage.py test
+
+## Autores:
+- Juan Jose Jimenez Lopez
+- Samuel Andres Valencia Ramirez

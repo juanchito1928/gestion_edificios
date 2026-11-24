@@ -56,34 +56,47 @@
 ## Instalación y Ejecución Local
 
 1. **Clonar el repositorio:**
-   git clone 
-   [https://github.com/juanchito1928/gestion_edificios.git]
-   (https://github.com/juanchito1928/gestion_edificios.git)
+    ```bash
+   git clone https://github.com/juanchito1928/gestion_edificios.git
+cd gestion_edificios
    cd gestion_edificios
+   ```
 
 2. **Crear y activar el entorno virtual:**
+    ```bash
    python -m venv venv
    # En Windows (PowerShell):
    .\venv\Scripts\Activate.ps1
    # En Linux / macOS:
    source venv/bin/activate
+   ```
 
 3. **Instalar dependencias:**
+    ```bash
     pip install -r requirements.txt
+    ```
 
 4. **Aplicar migraciones y crear superusuario:**
+    ```bash
     python manage.py migrate
     python manage.py createsuperuser
+    ```
 
 5. **Iniciar el servidor local:**
+    ```bash
     python manage.py runserver
+    ```
 
 6. **Ejecucion con Docker:**
+    ```bash
     docker build -t torreops .
     docker run --env-file .env -p 8000:8000 torreops
+    ```
 
 7. **Pruebas Automatizadas:**
+    ```bash
     python manage.py test
+    ```
 
 ## Autores:
 - Juan Jose Jimenez Lopez
